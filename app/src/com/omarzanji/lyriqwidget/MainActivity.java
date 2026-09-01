@@ -149,9 +149,10 @@ public final class MainActivity extends Activity {
     }
 
     private void updateSmartcarStatus() {
-        scStatus.setText(prefs.scConnected()
-                ? "Connected" + (prefs.scVehicleId().isEmpty() ? "" : " · vehicle " + prefs.scVehicleId().substring(0, 8) + "…")
-                : "Not connected");
+        if (!prefs.scConnected()) { scStatus.setText("Not connected"); return; }
+        String v = prefs.scVehicleId();
+        scStatus.setText("Connected (" + prefs.scApiVersion().toUpperCase(java.util.Locale.US) + ")"
+                + (v.isEmpty() ? "" : " · vehicle " + v.substring(0, Math.min(8, v.length())) + "…"));
     }
 
     /** Persists the form. Returns false (with a toast) when a required field is missing. */

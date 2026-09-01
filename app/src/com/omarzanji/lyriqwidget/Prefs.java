@@ -54,9 +54,16 @@ public final class Prefs {
         sp.edit().putString("sc_access", access).putString("sc_refresh", refresh).putLong("sc_expires", expiresAt).apply();
     }
     public void setScVehicleId(String id) { sp.edit().putString("sc_vehicle", id).apply(); }
-    public boolean scConnected() { return !scRefreshToken().isEmpty(); }
+    public String scUserId() { return sp.getString("sc_user_id", ""); }
+    public void setScUserId(String id) { sp.edit().putString("sc_user_id", id).apply(); }
+    public String scApiVersion() { return sp.getString("sc_api_version", "v2"); }
+    public void setScApiVersion(String v) { sp.edit().putString("sc_api_version", v).apply(); }
+    public boolean scConnected() {
+        return "v3".equals(scApiVersion()) ? !scUserId().isEmpty() : !scRefreshToken().isEmpty();
+    }
     public void clearSmartcarConnection() {
-        sp.edit().remove("sc_access").remove("sc_refresh").remove("sc_expires").remove("sc_vehicle").apply();
+        sp.edit().remove("sc_access").remove("sc_refresh").remove("sc_expires").remove("sc_vehicle")
+                .remove("sc_user_id").remove("sc_api_version").apply();
     }
 
     // ---- home assistant ----

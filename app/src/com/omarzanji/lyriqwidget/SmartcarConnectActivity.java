@@ -68,6 +68,7 @@ public final class SmartcarConnectActivity extends Activity {
         handled = true;
         String error = uri.getQueryParameter("error");
         final String code = uri.getQueryParameter("code");
+        final String userId = uri.getQueryParameter("user_id");
         if (error != null || code == null) {
             String desc = uri.getQueryParameter("error_description");
             fail("Smartcar denied the connection: " + (desc != null ? desc : error));
@@ -78,7 +79,7 @@ public final class SmartcarConnectActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    SmartcarSource.exchangeCode(prefs, code);
+                    SmartcarSource.completeConnect(prefs, code, userId);
                     prefs.setSource(VehicleSource.SMARTCAR);
                     Refresher.refreshNow(SmartcarConnectActivity.this);
                     runOnUiThread(new Runnable() {

@@ -7,17 +7,29 @@ import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
  * Smartcar (https://smartcar.com) — the officially supported way to read a GM/Cadillac
- * vehicle from a third-party app. The owner authorizes via Smartcar Connect with their
- * OnStar login; we then call /battery and /charge for the connected vehicle.
+ * vehicle from a third-party app. Two generations of credentials exist:
+ *
+ *  - V3 (current dashboards): an Application ID (UUID) used as the Connect client_id, plus
+ *    "API credentials" (client_... id + secret) that mint a 1-hour application token from
+ *    iam.smartcar.com. Connect appends a user_id to the redirect; vehicle reads go to
+ *    vehicle.api.smartcar.com/v3 with an "sc-user-id" header.
+ *  - V2 (legacy credentials): the classic authorization-code exchange at auth.smartcar.com
+ *    with refresh tokens, and api.smartcar.com/v2.0 endpoints.
+ *
+ * We use V3 whenever a client_... id is configured and the redirect carried a user_id,
+ * otherwise fall back to V2.
  */
 public final class SmartcarSource implements VehicleSource {
     static final String AUTH_URL = "https://connect.smartcar.com/oauth/authorize";
-    static final String TOKEN_URL = "https://auth.smartcar.com/oauth/token";
-    static final String API = "https://api.smartcar.com/v2.0";
+    static final String TOKEN_URL_V2 = "https://auth.smartcar.com/oauth/token";
+    static final String TOKEN_URL_V3 = "https://iam.smartcar.com/oauth2/token";
+    static final String API_V2 = "https://api.smartcar.com/v2.0";
+    static final String API_V3 = "https://vehicle.api.smartcar.com/v3";
     static final String SCOPES = "read_vehicle_info read_battery read_charge";
 
     /** Smartcar requires native redirect URIs of the form sc<clientId>://<host>. */
@@ -41,22 +53,143 @@ public final class SmartcarSource implements VehicleSource {
         try { return java.net.URLEncoder.encode(s, "UTF-8"); } catch (Exception e) { return s; }
     }
 
-    /** Exchanges the authorization code for tokens and stores them. */
-    static void exchangeCode(Prefs prefs, String code) throws Exception {
+    // ------------------------------------------------------------------ connect
+
+    /** Completes the Connect flow after the redirect. userId may be null on legacy apps. */
+    static void completeConnect(Prefs prefs, String code, String userId) throws Exception {
+        boolean v3 = !prefs.scTokenClientId().isEmpty() && userId != null && !userId.isEmpty();
+        if (v3) {
+            prefs.setScUserId(userId);
+            prefs.setScApiVersion("v3");
+            prefs.setScVehicleId("");
+            String token = appToken(prefs);
+            prefs.setScVehicleId(findVehicleV3(prefs, token, userId));
+        } else {
+            prefs.setScApiVersion("v2");
+            exchangeCodeV2(prefs, code);
+            prefs.setScVehicleId("");
+        }
+    }
+
+    // ------------------------------------------------------------------ V3
+
+    /** Client-credentials application token (1 hour). Cached in prefs until near expiry. */
+    private static String appToken(Prefs prefs) throws Exception {
+        if (!prefs.scAccessToken().isEmpty() && System.currentTimeMillis() < prefs.scExpiresAt() - 60_000L) {
+            return prefs.scAccessToken();
+        }
+        JSONObject body = new JSONObject()
+                .put("grant_type", "client_credentials")
+                .put("client_id", prefs.scTokenClientId())
+                .put("client_secret", prefs.scClientSecret());
+        Http.Response r = Http.request("POST", TOKEN_URL_V3, null, body.toString(), "application/json");
+        if (!r.ok()) {
+            // Some deployments want form encoding instead of JSON; try once more.
+            String form = "grant_type=client_credentials&client_id=" + enc(prefs.scTokenClientId())
+                    + "&client_secret=" + enc(prefs.scClientSecret());
+            Http.Response r2 = Http.request("POST", TOKEN_URL_V3, null, form, "application/x-www-form-urlencoded");
+            if (!r2.ok()) throw new IllegalStateException("Smartcar API-credentials error (" + r.code + "): " + errorMessage(r.body));
+            r = r2;
+        }
+        JSONObject j = new JSONObject(r.body);
+        long expiresAt = System.currentTimeMillis() + j.optLong("expires_in", 3600) * 1000L;
+        prefs.setScTokens(j.getString("access_token"), "", expiresAt);
+        return j.getString("access_token");
+    }
+
+    private static Map<String, String> v3Headers(String token, String userId) {
+        Map<String, String> h = new HashMap<>();
+        h.put("Authorization", "Bearer " + token);
+        if (userId != null && !userId.isEmpty()) h.put("sc-user-id", userId);
+        return h;
+    }
+
+    private static String findVehicleV3(Prefs prefs, String token, String userId) throws Exception {
+        Http.Response r = Http.request("GET", API_V3 + "/connections", v3Headers(token, userId), null, null);
+        if (!r.ok()) throw new IllegalStateException("Smartcar connections error (" + r.code + "): " + errorMessage(r.body));
+        JSONArray data = new JSONObject(r.body).optJSONArray("data");
+        String first = null;
+        if (data != null) {
+            for (int i = 0; i < data.length(); i++) {
+                JSONObject c = data.getJSONObject(i);
+                String vehicleId = c.optString("vehicle_id", "");
+                String uid = c.optString("user_id", "");
+                JSONObject rel = c.optJSONObject("relationships");
+                if (rel != null) {
+                    JSONObject v = rel.optJSONObject("vehicle"), u = rel.optJSONObject("user");
+                    if (v != null && v.optJSONObject("data") != null) vehicleId = v.optJSONObject("data").optString("id", vehicleId);
+                    if (u != null && u.optJSONObject("data") != null) uid = u.optJSONObject("data").optString("id", uid);
+                }
+                if (vehicleId.isEmpty()) continue;
+                if (first == null) first = vehicleId;
+                if (uid.equals(userId)) return vehicleId; // prefer the vehicle this user just connected
+            }
+        }
+        if (first == null) throw new IllegalStateException("Smartcar reports no connected vehicles yet");
+        return first;
+    }
+
+    private static BatterySnapshot fetchV3(Prefs prefs) throws Exception {
+        String token = appToken(prefs);
+        String userId = prefs.scUserId();
+        String vehicleId = prefs.scVehicleId();
+        if (vehicleId.isEmpty()) {
+            vehicleId = findVehicleV3(prefs, token, userId);
+            prefs.setScVehicleId(vehicleId);
+        }
+        Http.Response r = Http.request("GET", API_V3 + "/vehicles/" + vehicleId + "/signals", v3Headers(token, userId), null, null);
+        if (r.code == 401) {
+            prefs.setScTokens("", "", 0);
+            throw new IllegalStateException("Smartcar token expired — refresh again");
+        }
+        if (!r.ok()) throw new IllegalStateException("Smartcar signals error (" + r.code + "): " + errorMessage(r.body));
+
+        int percent = -1;
+        double rangeMiles = -1;
+        boolean charging = false, plugged = false;
+        JSONObject root = new JSONObject(r.body);
+        JSONArray data = root.optJSONArray("data");
+        if (data == null && root.optJSONObject("data") != null) data = new JSONArray().put(root.optJSONObject("data"));
+        if (data != null) {
+            for (int i = 0; i < data.length(); i++) {
+                JSONObject item = data.getJSONObject(i);
+                JSONObject a = item.optJSONObject("attributes");
+                if (a == null) a = item;
+                String name = (a.optString("name", "") + " " + a.optString("code", "") + " " + item.optString("id", "")).toLowerCase(Locale.US);
+                JSONObject status = a.optJSONObject("status");
+                if (status != null && "ERROR".equalsIgnoreCase(status.optString("value", ""))) continue;
+                JSONObject body = a.optJSONObject("body");
+                if (body == null) continue;
+                String unit = a.optString("unit", "").toLowerCase(Locale.US);
+                if (name.contains("tractionbattery-stateofcharge")) {
+                    double v = body.optDouble("value", -1);
+                    if (v >= 0) percent = (int) Math.round(v <= 1.0 && !unit.equals("percent") ? v * 100 : v);
+                    if (percent > 100 && v <= 1.0) percent = (int) Math.round(v * 100);
+                } else if (name.contains("tractionbattery-range")) {
+                    double v = body.optDouble("value", -1);
+                    if (v >= 0) rangeMiles = unit.startsWith("mi") ? v : v * 0.621371;
+                } else if (name.contains("charge-detailedchargingstatus") || name.contains("charge-chargingstatus")) {
+                    String s = body.optString("value", "").toUpperCase(Locale.US);
+                    charging = s.contains("CHARGING") && !s.contains("NOT") && !s.contains("DIS");
+                    if (s.contains("PLUGGED") || s.contains("CONNECTED")) plugged = true;
+                } else if (name.contains("charge-ischargingcableconnected") || name.contains("charge-ispluggedin")) {
+                    plugged = body.optBoolean("value", false) || "true".equalsIgnoreCase(body.optString("value", ""));
+                }
+            }
+        }
+        if (percent < 0) throw new IllegalStateException("Smartcar returned no state-of-charge signal");
+        return new BatterySnapshot(percent, rangeMiles, charging, plugged || charging, System.currentTimeMillis(), "Cadillac LYRIQ", null);
+    }
+
+    // ------------------------------------------------------------------ V2 (legacy)
+
+    private static void exchangeCodeV2(Prefs prefs, String code) throws Exception {
         String body = "grant_type=authorization_code&code=" + enc(code)
                 + "&redirect_uri=" + enc(redirectUri(prefs.scClientId()));
-        tokenRequest(prefs, body);
-        prefs.setScVehicleId("");
+        tokenRequestV2(prefs, body);
     }
 
-    private static void refreshTokens(Prefs prefs) throws Exception {
-        tokenRequest(prefs, "grant_type=refresh_token&refresh_token=" + enc(prefs.scRefreshToken()));
-    }
-
-    private static void tokenRequest(Prefs prefs, String body) throws Exception {
-        // Newer Smartcar dashboards show a UUID "Application ID" (the Connect client_id) and a
-        // separate "client_..." ID on the API credentials tab that pairs with the secret.
-        // Try whichever identities we have until the token endpoint accepts one.
+    private static void tokenRequestV2(Prefs prefs, String body) throws Exception {
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
         if (!prefs.scTokenClientId().isEmpty()) ids.add(prefs.scTokenClientId());
         ids.add(prefs.scClientId());
@@ -65,56 +198,52 @@ public final class SmartcarSource implements VehicleSource {
             Map<String, String> headers = new HashMap<>();
             String basic = id + ":" + prefs.scClientSecret();
             headers.put("Authorization", "Basic " + Base64.encodeToString(basic.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
-            last = Http.request("POST", TOKEN_URL, headers, body, "application/x-www-form-urlencoded");
-            if (last.ok()) break;
-            if (last.code != 401 && last.code != 403) break;
+            last = Http.request("POST", TOKEN_URL_V2, headers, body, "application/x-www-form-urlencoded");
+            if (last.ok() || (last.code != 401 && last.code != 403)) break;
         }
         if (last == null || !last.ok()) {
-            String hint = ids.size() == 1 ? " Tip: paste the client_... ID from the API credentials tab into the app." : "";
-            throw new IllegalStateException("Smartcar token error (" + last.code + "): " + errorMessage(last.body) + hint);
+            throw new IllegalStateException("Smartcar token error (" + last.code + "): " + errorMessage(last.body)
+                    + " — if your dashboard shows a client_… ID under API credentials, enter it in the app to use the V3 flow.");
         }
         JSONObject j = new JSONObject(last.body);
         long expiresAt = System.currentTimeMillis() + j.optLong("expires_in", 7200) * 1000L;
         prefs.setScTokens(j.getString("access_token"), j.getString("refresh_token"), expiresAt);
     }
 
-    private static String accessToken(Prefs prefs) throws Exception {
-        if (!prefs.scConnected()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
+    private static String accessTokenV2(Prefs prefs) throws Exception {
+        if (prefs.scRefreshToken().isEmpty()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
         if (prefs.scAccessToken().isEmpty() || System.currentTimeMillis() > prefs.scExpiresAt() - 60_000L) {
-            refreshTokens(prefs);
+            tokenRequestV2(prefs, "grant_type=refresh_token&refresh_token=" + enc(prefs.scRefreshToken()));
         }
         return prefs.scAccessToken();
     }
 
-    private static Map<String, String> apiHeaders(String token) {
+    private static Map<String, String> v2Headers(String token) {
         Map<String, String> h = new HashMap<>();
         h.put("Authorization", "Bearer " + token);
         h.put("SC-Unit-System", "imperial");
         return h;
     }
 
-    @Override
-    public BatterySnapshot fetch(Prefs prefs) throws Exception {
-        String token = accessToken(prefs);
+    private static BatterySnapshot fetchV2(Prefs prefs) throws Exception {
+        String token = accessTokenV2(prefs);
         String vehicleId = prefs.scVehicleId();
         if (vehicleId.isEmpty()) {
-            Http.Response r = Http.request("GET", API + "/vehicles", apiHeaders(token), null, null);
+            Http.Response r = Http.request("GET", API_V2 + "/vehicles", v2Headers(token), null, null);
             if (!r.ok()) throw new IllegalStateException("Smartcar vehicles error (" + r.code + "): " + errorMessage(r.body));
             JSONArray ids = new JSONObject(r.body).getJSONArray("vehicles");
             if (ids.length() == 0) throw new IllegalStateException("No vehicle authorized on this Smartcar connection");
             vehicleId = ids.getString(0);
             prefs.setScVehicleId(vehicleId);
         }
-
-        // One batch request = fewer round trips; each sub-request still counts toward the plan.
         JSONObject batch = new JSONObject().put("requests", new JSONArray()
                 .put(new JSONObject().put("path", "/battery"))
                 .put(new JSONObject().put("path", "/charge"))
                 .put(new JSONObject().put("path", "/")));
-        Http.Response r = Http.request("POST", API + "/vehicles/" + vehicleId + "/batch", apiHeaders(token),
+        Http.Response r = Http.request("POST", API_V2 + "/vehicles/" + vehicleId + "/batch", v2Headers(token),
                 batch.toString(), "application/json");
         if (r.code == 401) {
-            prefs.setScTokens("", prefs.scRefreshToken(), 0); // force a refresh next time
+            prefs.setScTokens("", prefs.scRefreshToken(), 0);
             throw new IllegalStateException("Smartcar session expired — refresh again");
         }
         if (!r.ok()) throw new IllegalStateException("Smartcar batch error (" + r.code + "): " + errorMessage(r.body));
@@ -152,12 +281,21 @@ public final class SmartcarSource implements VehicleSource {
         return new BatterySnapshot(percent, range, charging, plugged, System.currentTimeMillis(), name, null);
     }
 
+    // ------------------------------------------------------------------ entry point
+
+    @Override
+    public BatterySnapshot fetch(Prefs prefs) throws Exception {
+        if (!prefs.scConnected()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
+        return "v3".equals(prefs.scApiVersion()) ? fetchV3(prefs) : fetchV2(prefs);
+    }
+
     private static String errorMessage(String body) {
         try {
             JSONObject j = new JSONObject(body);
             String d = j.optString("description", "");
             if (d.isEmpty()) d = j.optString("error_description", "");
             if (d.isEmpty()) d = j.optString("message", "");
+            if (d.isEmpty()) d = j.optString("detail", "");
             if (d.isEmpty()) d = j.optString("error", "");
             return d.isEmpty() ? body : d;
         } catch (Exception e) {
