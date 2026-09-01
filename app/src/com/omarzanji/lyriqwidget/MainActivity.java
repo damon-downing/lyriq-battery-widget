@@ -40,6 +40,13 @@ public final class MainActivity extends Activity {
         prefs = new Prefs(this);
         setContentView(R.layout.activity_main);
 
+        // Opened from the launcher's long-press "settings" (reconfigure) action: tell the host the
+        // widget id is fine as-is, so backing out never deletes the widget. Settings apply on Save.
+        int widgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
+        }
+
         sourceGroup = findViewById(R.id.source_group);
         styleGroup = findViewById(R.id.style_group);
         sectionCarColor = findViewById(R.id.section_car_color);

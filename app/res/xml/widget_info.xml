@@ -10,5 +10,7 @@
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_small"
     android:previewLayout="@layout/widget_large"
+    android:configure="com.omarzanji.lyriqwidget.MainActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:description="@string/widget_description"
     android:widgetCategory="home_screen" />
