@@ -51,7 +51,8 @@ public final class SmartcarConnectActivity extends Activity {
     private boolean intercept(Uri uri, final Prefs prefs, String redirect) {
         if (uri == null || handled) return false;
         String url = uri.toString();
-        if (!url.startsWith(redirect)) return false;
+        // URL schemes are case-insensitive and Smartcar client IDs can contain capitals.
+        if (!url.toLowerCase(java.util.Locale.US).startsWith(redirect.toLowerCase(java.util.Locale.US))) return false;
         handled = true;
         String error = uri.getQueryParameter("error");
         final String code = uri.getQueryParameter("code");
