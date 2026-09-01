@@ -24,6 +24,13 @@ public final class Prefs {
     public boolean hasRefreshMinutes() { return sp.contains("refresh_minutes"); }
     public void setRefreshMinutes(int m) { sp.edit().putInt("refresh_minutes", Math.max(15, m)).apply(); }
 
+    // ---- widget look ----
+    public static final String STYLE_RING = "ring", STYLE_CAR = "car", STYLE_BAR = "bar";
+    public String widgetStyle() { return sp.getString("widget_style", STYLE_RING); }
+    public void setWidgetStyle(String s) { sp.edit().putString("widget_style", s).apply(); }
+    public int carColor() { return sp.getInt("car_color", CarRenderer.PAINT_COLORS[5]); }
+    public void setCarColor(int argb) { sp.edit().putInt("car_color", argb).apply(); }
+
     public boolean isRefreshing() { return sp.getBoolean("refreshing", false); }
     public void setRefreshing(boolean b) { sp.edit().putBoolean("refreshing", b).apply(); }
 

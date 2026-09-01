@@ -33,6 +33,17 @@ when myCadillac is absent).
 - **Home Assistant** is the second supported source, for anyone already running
   onstar2mqtt (or any integration) — the widget reads entity states via HA's REST API.
 
+## Widget styles
+
+Pick one in the app under **Widget style**; every style has small / medium / large layouts.
+
+- **Ring** (default): charge ring, percent, range and charge state.
+- **Car**: a side-profile LYRIQ drawn in your paint color (nine factory paints plus a custom
+  hex) above a slim battery bar; the charge-port bolt lights up while charging.
+- **Bar**: a big percent over a full-width battery bar, Tesla-widget style.
+
+Tapping the widget opens myCadillac; tapping the ring, car or bar refreshes.
+
 ## Data sources
 
 | Source | What you need | Notes |

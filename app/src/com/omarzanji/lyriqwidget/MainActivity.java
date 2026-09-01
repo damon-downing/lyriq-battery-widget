@@ -21,7 +21,12 @@ import android.widget.Toast;
 public final class MainActivity extends Activity {
     private Prefs prefs;
 
-    private RadioGroup sourceGroup;
+    private RadioGroup sourceGroup, styleGroup;
+    private View sectionCarColor;
+    private android.widget.LinearLayout colorRow;
+    private EditText carColorHex;
+    private TextView colorName;
+    private int selectedColor;
     private View sectionSmartcar, sectionHa, sectionManual;
     private EditText scClientId, scTokenClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes;
     private CheckBox scSimulated, manualCharging;
@@ -36,6 +41,11 @@ public final class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         sourceGroup = findViewById(R.id.source_group);
+        styleGroup = findViewById(R.id.style_group);
+        sectionCarColor = findViewById(R.id.section_car_color);
+        colorRow = findViewById(R.id.color_row);
+        carColorHex = findViewById(R.id.car_color_hex);
+        colorName = findViewById(R.id.color_name);
         sectionSmartcar = findViewById(R.id.section_smartcar);
         sectionHa = findViewById(R.id.section_ha);
         sectionManual = findViewById(R.id.section_manual);
@@ -60,6 +70,21 @@ public final class MainActivity extends Activity {
 
         loadIntoForm();
 
+        styleGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(RadioGroup g, int id) {
+                sectionCarColor.setVisibility(id == R.id.style_car ? View.VISIBLE : View.GONE);
+                renderStatus(prefs.snapshot());
+            }
+        });
+        carColorHex.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(Editable s) {
+                Integer c = parseHex(s.toString());
+                if (c != null && c != selectedColor) { selectedColor = c; buildSwatches(); renderStatus(prefs.snapshot()); }
+            }
+        });
         sourceGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(RadioGroup g, int id) { showSection(id); }
@@ -121,6 +146,15 @@ public final class MainActivity extends Activity {
             default: sourceGroup.check(R.id.source_manual);
         }
         showSection(sourceGroup.getCheckedRadioButtonId());
+        switch (prefs.widgetStyle()) {
+            case Prefs.STYLE_CAR: styleGroup.check(R.id.style_car); break;
+            case Prefs.STYLE_BAR: styleGroup.check(R.id.style_bar); break;
+            default: styleGroup.check(R.id.style_ring);
+        }
+        sectionCarColor.setVisibility(prefs.widgetStyle().equals(Prefs.STYLE_CAR) ? View.VISIBLE : View.GONE);
+        selectedColor = prefs.carColor();
+        carColorHex.setText(String.format(java.util.Locale.US, "#%06X", selectedColor & 0xFFFFFF));
+        buildSwatches();
         scClientId.setText(prefs.scClientId());
         scTokenClientId.setText(prefs.scTokenClientId());
         scClientSecret.setText(prefs.scClientSecret());
@@ -172,7 +206,12 @@ public final class MainActivity extends Activity {
         }
         prefs.setRefreshMinutes(minutes);
         prefs.setSource(source);
+        int styleId = styleGroup.getCheckedRadioButtonId();
+        prefs.setWidgetStyle(styleId == R.id.style_car ? Prefs.STYLE_CAR : styleId == R.id.style_bar ? Prefs.STYLE_BAR : Prefs.STYLE_RING);
+        Integer hex = parseHex(carColorHex.getText().toString());
+        prefs.setCarColor(hex != null ? hex : selectedColor);
         Scheduler.schedulePeriodic(this);
+        LyriqWidgetProvider.updateAll(this);
         return true;
     }
 
@@ -203,9 +242,59 @@ public final class MainActivity extends Activity {
         }, "lyriq-manual-refresh").start();
     }
 
+    private String currentStyle() {
+        int id = styleGroup.getCheckedRadioButtonId();
+        return id == R.id.style_car ? Prefs.STYLE_CAR : id == R.id.style_bar ? Prefs.STYLE_BAR : Prefs.STYLE_RING;
+    }
+
+    private static Integer parseHex(String text) {
+        String t = text.trim();
+        if (t.startsWith("#")) t = t.substring(1);
+        if (t.length() != 6) return null;
+        try { return 0xFF000000 | Integer.parseInt(t, 16); } catch (NumberFormatException e) { return null; }
+    }
+
+    private void buildSwatches() {
+        colorRow.removeAllViews();
+        float d = getResources().getDisplayMetrics().density;
+        int size = Math.round(44 * d), gap = Math.round(10 * d);
+        String name = "Custom";
+        for (int i = 0; i < CarRenderer.PAINT_COLORS.length; i++) {
+            final int color = CarRenderer.PAINT_COLORS[i];
+            final String paint = CarRenderer.PAINT_NAMES[i];
+            boolean selected = color == selectedColor;
+            if (selected) name = paint;
+            android.graphics.drawable.GradientDrawable dot = new android.graphics.drawable.GradientDrawable();
+            dot.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            dot.setColor(color);
+            dot.setStroke(Math.round((selected ? 3 : 1) * d), selected ? getColor(R.color.gauge_fill) : getColor(R.color.widget_text_secondary));
+            View v = new View(this);
+            v.setBackground(dot);
+            v.setContentDescription(paint);
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(size, size);
+            lp.setMarginEnd(gap);
+            v.setLayoutParams(lp);
+            v.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    selectedColor = color;
+                    carColorHex.setText(String.format(java.util.Locale.US, "#%06X", color & 0xFFFFFF));
+                    buildSwatches();
+                    renderStatus(prefs.snapshot());
+                }
+            });
+            colorRow.addView(v);
+        }
+        colorName.setText(name);
+    }
+
     private void renderStatus(BatterySnapshot snap) {
-        int px = Math.round(84 * getResources().getDisplayMetrics().density);
-        statusGauge.setImageBitmap(WidgetRenderer.gauge(this, snap, px));
+        float d = getResources().getDisplayMetrics().density;
+        if (Prefs.STYLE_CAR.equals(currentStyle())) {
+            statusGauge.setImageBitmap(CarRenderer.car(this, selectedColor, snap.charging, Math.round(130 * d), Math.round(50 * d)));
+        } else {
+            statusGauge.setImageBitmap(WidgetRenderer.gauge(this, snap, Math.round(84 * d)));
+        }
         statusPercent.setText(WidgetRenderer.percentText(snap));
         statusLine.setText(WidgetRenderer.statusLine(this, snap) + "\n" + WidgetRenderer.footer(this, prefs, snap));
     }

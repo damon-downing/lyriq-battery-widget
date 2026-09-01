@@ -32,8 +32,8 @@
 
             <ImageView
                 android:id="@+id/status_gauge"
-                android:layout_width="84dp"
-                android:layout_height="84dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:contentDescription="@null" />
 
             <LinearLayout
@@ -81,6 +81,43 @@
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
                 android:text="Add widget" />
+        </LinearLayout>
+
+        <TextView style="@style/SectionTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Widget style" />
+
+        <RadioGroup
+            android:id="@+id/style_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <RadioButton android:id="@+id/style_ring" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ring — charge ring with percent and range (default)" />
+            <RadioButton android:id="@+id/style_car" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Car — your LYRIQ in its paint color with a battery bar" />
+            <RadioButton android:id="@+id/style_bar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bar — big percent over a slim battery bar" />
+        </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/section_car_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="LYRIQ paint" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none">
+                <LinearLayout
+                    android:id="@+id/color_row"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp" />
+            </HorizontalScrollView>
+
+            <TextView android:id="@+id/color_name" style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content" />
+            <EditText android:id="@+id/car_color_hex" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Custom hex, e.g. #1C3D72" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
         </LinearLayout>
 
         <TextView style="@style/SectionTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Data source" />
