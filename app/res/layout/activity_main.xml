@@ -103,10 +103,11 @@
             android:orientation="vertical">
 
             <TextView style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Create a free app at dashboard.smartcar.com, paste its Client ID and Secret, then add the redirect URI shown below in the dashboard's Redirect URIs before connecting." />
+                android:text="From dashboard.smartcar.com: paste the Application ID (Application details tab), the client_… Client ID and the Client secret (API credentials tab), then add the redirect URI shown below under Redirect URIs before connecting." />
 
-            <EditText android:id="@+id/sc_client_id" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Smartcar client ID" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
-            <EditText android:id="@+id/sc_client_secret" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Smartcar client secret" android:inputType="textPassword" android:importantForAutofill="no" />
+            <EditText android:id="@+id/sc_client_id" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Application ID (UUID, Application details tab)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
+            <EditText android:id="@+id/sc_token_client_id" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Client ID (client_…, API credentials tab)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
+            <EditText android:id="@+id/sc_client_secret" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Client secret (API credentials tab)" android:inputType="textPassword" android:importantForAutofill="no" />
 
             <TextView android:id="@+id/sc_redirect_uri" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:textIsSelectable="true" android:textSize="13sp" android:fontFamily="monospace" android:textColor="@color/widget_text" android:paddingTop="6dp" android:paddingBottom="6dp" />

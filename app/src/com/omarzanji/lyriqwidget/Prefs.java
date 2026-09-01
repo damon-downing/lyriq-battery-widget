@@ -38,8 +38,11 @@ public final class Prefs {
     public String scClientId() { return sp.getString("sc_client_id", ""); }
     public String scClientSecret() { return sp.getString("sc_client_secret", ""); }
     public boolean scSimulated() { return sp.getBoolean("sc_simulated", false); }
-    public void setSmartcarApp(String id, String secret, boolean simulated) {
+    /** Optional "client_..." ID from the API credentials tab; used with the secret at the token endpoint. */
+    public String scTokenClientId() { return sp.getString("sc_token_client_id", ""); }
+    public void setSmartcarApp(String id, String tokenClientId, String secret, boolean simulated) {
         sp.edit().putString("sc_client_id", id.trim())
+                .putString("sc_token_client_id", tokenClientId.trim())
                 .putString("sc_client_secret", secret.trim())
                 .putBoolean("sc_simulated", simulated).apply();
     }

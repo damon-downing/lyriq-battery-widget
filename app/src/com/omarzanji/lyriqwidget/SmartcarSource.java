@@ -54,12 +54,26 @@ public final class SmartcarSource implements VehicleSource {
     }
 
     private static void tokenRequest(Prefs prefs, String body) throws Exception {
-        Map<String, String> headers = new HashMap<>();
-        String basic = prefs.scClientId() + ":" + prefs.scClientSecret();
-        headers.put("Authorization", "Basic " + Base64.encodeToString(basic.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
-        Http.Response r = Http.request("POST", TOKEN_URL, headers, body, "application/x-www-form-urlencoded");
-        if (!r.ok()) throw new IllegalStateException("Smartcar token error (" + r.code + "): " + errorMessage(r.body));
-        JSONObject j = new JSONObject(r.body);
+        // Newer Smartcar dashboards show a UUID "Application ID" (the Connect client_id) and a
+        // separate "client_..." ID on the API credentials tab that pairs with the secret.
+        // Try whichever identities we have until the token endpoint accepts one.
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        if (!prefs.scTokenClientId().isEmpty()) ids.add(prefs.scTokenClientId());
+        ids.add(prefs.scClientId());
+        Http.Response last = null;
+        for (String id : ids) {
+            Map<String, String> headers = new HashMap<>();
+            String basic = id + ":" + prefs.scClientSecret();
+            headers.put("Authorization", "Basic " + Base64.encodeToString(basic.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
+            last = Http.request("POST", TOKEN_URL, headers, body, "application/x-www-form-urlencoded");
+            if (last.ok()) break;
+            if (last.code != 401 && last.code != 403) break;
+        }
+        if (last == null || !last.ok()) {
+            String hint = ids.size() == 1 ? " Tip: paste the client_... ID from the API credentials tab into the app." : "";
+            throw new IllegalStateException("Smartcar token error (" + last.code + "): " + errorMessage(last.body) + hint);
+        }
+        JSONObject j = new JSONObject(last.body);
         long expiresAt = System.currentTimeMillis() + j.optLong("expires_in", 7200) * 1000L;
         prefs.setScTokens(j.getString("access_token"), j.getString("refresh_token"), expiresAt);
     }

@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
 
     private RadioGroup sourceGroup;
     private View sectionSmartcar, sectionHa, sectionManual;
-    private EditText scClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes;
+    private EditText scClientId, scTokenClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes;
     private CheckBox scSimulated, manualCharging;
     private TextView scRedirectUri, scStatus, manualLabel, statusPercent, statusLine;
     private SeekBar manualPercent;
@@ -40,6 +40,7 @@ public final class MainActivity extends Activity {
         sectionHa = findViewById(R.id.section_ha);
         sectionManual = findViewById(R.id.section_manual);
         scClientId = findViewById(R.id.sc_client_id);
+        scTokenClientId = findViewById(R.id.sc_token_client_id);
         scClientSecret = findViewById(R.id.sc_client_secret);
         scSimulated = findViewById(R.id.sc_simulated);
         scRedirectUri = findViewById(R.id.sc_redirect_uri);
@@ -121,6 +122,7 @@ public final class MainActivity extends Activity {
         }
         showSection(sourceGroup.getCheckedRadioButtonId());
         scClientId.setText(prefs.scClientId());
+        scTokenClientId.setText(prefs.scTokenClientId());
         scClientSecret.setText(prefs.scClientSecret());
         scSimulated.setChecked(prefs.scSimulated());
         updateRedirectUri();
@@ -157,7 +159,7 @@ public final class MainActivity extends Activity {
         int checked = sourceGroup.getCheckedRadioButtonId();
         String source = checked == R.id.source_smartcar ? VehicleSource.SMARTCAR
                 : checked == R.id.source_ha ? VehicleSource.HOME_ASSISTANT : VehicleSource.MANUAL;
-        prefs.setSmartcarApp(scClientId.getText().toString(), scClientSecret.getText().toString(), scSimulated.isChecked());
+        prefs.setSmartcarApp(scClientId.getText().toString(), scTokenClientId.getText().toString(), scClientSecret.getText().toString(), scSimulated.isChecked());
         prefs.setHomeAssistant(haUrl.getText().toString(), haToken.getText().toString(),
                 haEntityBattery.getText().toString(), haEntityRange.getText().toString(), haEntityCharging.getText().toString());
         prefs.setManual(manualPercent.getProgress(), manualCharging.isChecked());

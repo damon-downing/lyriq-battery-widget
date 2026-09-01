@@ -43,6 +43,18 @@ public final class SmartcarConnectActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 return intercept(Uri.parse(url), prefs, redirect);
             }
+
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                // A server-side 302 to the custom scheme can bypass shouldOverrideUrlLoading; catch it here.
+                if (intercept(Uri.parse(url), prefs, redirect)) view.stopLoading();
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                if (request.isForMainFrame() && intercept(request.getUrl(), prefs, redirect)) return;
+                super.onReceivedError(view, request, error);
+            }
         });
         setContentView(web);
         web.loadUrl(SmartcarSource.authorizeUrl(prefs));
