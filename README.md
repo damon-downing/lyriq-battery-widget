@@ -23,8 +23,9 @@ vehicle name, percent, range, charge state and "Updated N min ago". Tap to refre
   OnStar/GM Digital API. That API is undocumented, requires TOTP MFA, and the
   reverse-engineered clients (OnStarJS2 / onstar2mqtt) break every time GM changes it.
 - **Smartcar** is the sanctioned route: an OAuth "Connect" flow where you log in with
-  your OnStar account, then a REST API (`/battery`, `/charge`, `/`) returns
-  `percentRemaining`, `range`, `isPluggedIn`, `state`. Cadillac is a supported brand;
+  your OnStar account, then a REST API returns state of charge, range and charge state
+  (V3 signals `tractionbattery-stateofcharge`, `tractionbattery-range`,
+  `charge-detailedchargingstatus`; V2 `/battery` + `/charge`). Cadillac is a supported brand;
   the free plan covers 1 live vehicle and ~500 calls/vehicle/month, so this app defaults
   to a 2-hour background refresh plus on-demand taps.
 - **Home Assistant** is the second supported source, for anyone already running
@@ -34,7 +35,7 @@ vehicle name, percent, range, charge state and "Updated N min ago". Tap to refre
 
 | Source | What you need | Notes |
 | --- | --- | --- |
-| Smartcar | Free app at dashboard.smartcar.com → Client ID + Secret; add the redirect URI the app shows (`sc<clientId>://exchange`) | Toggle "simulated vehicle" to test without the car. Tokens are refreshed automatically. |
+| Smartcar (API V3, verified working with the LYRIQ) | Free app at dashboard.smartcar.com. Paste the **Application ID** (Configuration → Application details), the **Client ID** (`client_…`) and **Client secret** (API credentials tab). Register the redirect URI the app shows: `sc<ApplicationID>://exchange` | Connect uses the Application ID; the `client_…` credentials mint a 1-hour app token at `iam.smartcar.com`; the vehicle is resolved via `/v3/connections` and read from `/v3/vehicles/{id}/signals` with the `sc-user-id` from the Connect redirect. Legacy V2 credentials still work as a fallback. |
 | Home Assistant | Base URL, long-lived token, battery entity id (plus optional range / charging entities) | Works with `sensor.<car>_ev_battery_level`, `sensor.<car>_ev_range`, `binary_sensor.<car>_ev_plug_state` from onstar2mqtt. |
 | Demo / manual | nothing | Lets you place and resize the widget immediately. |
 
