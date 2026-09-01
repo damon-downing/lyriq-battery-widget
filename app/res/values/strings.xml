@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LYRIQ Battery</string>
+    <string name="widget_label">LYRIQ Battery</string>
+    <string name="widget_description">Your Cadillac LYRIQ\'s state of charge, range and charging status. Resize from 2×1 up to full width.</string>
+    <string name="connect_title">Connect to Smartcar</string>
+    <string name="vehicle_name_default">Cadillac LYRIQ</string>
+    <string name="tap_to_refresh">Tap to refresh</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="no_data">Open the app to set up</string>
+</resources>
