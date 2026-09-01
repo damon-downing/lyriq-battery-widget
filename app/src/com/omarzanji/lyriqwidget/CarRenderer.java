@@ -42,79 +42,91 @@ public final class CarRenderer {
 
         // Ground shadow
         Paint shadow = new Paint(Paint.ANTI_ALIAS_FLAG);
-        shadow.setColor(Color.argb(64, 0, 0, 0));
-        c.drawOval(new RectF(28, 129, 372, 145), shadow);
+        shadow.setColor(Color.argb(72, 0, 0, 0));
+        c.drawOval(new RectF(24, 134, 376, 148), shadow);
 
-        int lighter = blend(color, 0xFFFFFFFF, 0.18f);
-        int darker = blend(color, 0xFF000000, 0.32f);
+        int lighter = blend(color, 0xFFFFFFFF, 0.16f);
+        int darker = blend(color, 0xFF000000, 0.36f);
 
-        // Body: crossover fastback, nose on the left.
+        // Body, traced against the LYRIQ's proportions (196.7 in long, 121.8 in wheelbase,
+        // 63.9 in tall): upright nose, long hood, cab-forward raked windshield, arcing roof
+        // into a fastback, jutting roof spoiler, liftgate tucked under it.
         Path body = new Path();
-        body.moveTo(20, 112);
-        body.lineTo(20, 92);
-        body.cubicTo(20, 78, 30, 70, 50, 66);       // nose / bumper
-        body.cubicTo(72, 62, 100, 58, 130, 56);     // hood
-        body.cubicTo(148, 40, 170, 26, 210, 24);    // A-pillar into roof
-        body.cubicTo(250, 22, 292, 26, 322, 42);    // roofline sweeping into fastback
-        body.cubicTo(338, 50, 350, 58, 356, 66);    // rear glass
-        body.cubicTo(366, 70, 376, 76, 378, 90);    // upright tailgate
-        body.lineTo(378, 112);
+        body.moveTo(18, 128);
+        body.lineTo(16, 96);
+        body.cubicTo(16, 80, 22, 70, 40, 66);       // nose
+        body.cubicTo(64, 62, 102, 60, 140, 58);     // hood
+        body.cubicTo(150, 50, 158, 40, 172, 32);    // windshield
+        body.cubicTo(190, 22, 215, 20, 232, 21);    // roof crest
+        body.cubicTo(270, 22, 300, 28, 326, 42);    // roof into fastback
+        body.cubicTo(338, 49, 348, 52, 360, 51);    // spoiler
+        body.lineTo(362, 55);
+        body.cubicTo(359, 58, 356, 60, 355, 62);    // spoiler underside
+        body.cubicTo(364, 70, 373, 80, 377, 92);    // liftgate glass
+        body.cubicTo(382, 104, 384, 116, 382, 128); // rear bumper
         body.close();
 
         Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        fill.setShader(new LinearGradient(0, 20, 0, 115, lighter, darker, Shader.TileMode.CLAMP));
+        fill.setShader(new LinearGradient(0, 20, 0, 128,
+                new int[]{lighter, color, darker}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
         c.drawPath(body, fill);
 
         // Subtle outline so white cars survive light widgets and black cars survive dark ones.
         Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
         edge.setStyle(Paint.Style.STROKE);
         edge.setStrokeWidth(2.2f);
-        edge.setColor(Color.argb(70, Color.red(outline), Color.green(outline), Color.blue(outline)));
+        edge.setColor(Color.argb(66, Color.red(outline), Color.green(outline), Color.blue(outline)));
         c.drawPath(body, edge);
 
-        // Glasshouse
+        // Side glass: rising beltline, pointed quarter window, thick body-color C-pillar behind it.
         Path glass = new Path();
-        glass.moveTo(146, 58);
-        glass.cubicTo(162, 44, 184, 32, 214, 31);
-        glass.cubicTo(250, 30, 288, 33, 316, 47);
-        glass.cubicTo(328, 53, 338, 60, 344, 66);
-        glass.lineTo(146, 60);
+        glass.moveTo(150, 63);
+        glass.cubicTo(160, 50, 172, 40, 190, 34);
+        glass.cubicTo(220, 30, 262, 32, 296, 42);
+        glass.cubicTo(310, 46, 322, 50, 330, 52);
+        glass.lineTo(318, 58);
+        glass.lineTo(150, 65);
         glass.close();
         Paint glassPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        glassPaint.setShader(new LinearGradient(0, 30, 0, 70, 0xFF2A3440, 0xFF0E1218, Shader.TileMode.CLAMP));
+        glassPaint.setShader(new LinearGradient(0, 28, 0, 66, 0xFF2B3644, 0xFF0C1016, Shader.TileMode.CLAMP));
         c.drawPath(glass, glassPaint);
 
-        // B-pillar, shoulder line, door seam
+        // B-pillar, character line, door seams, lower sill
         Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
         line.setStyle(Paint.Style.STROKE);
         line.setColor(darker);
         line.setStrokeWidth(4);
-        c.drawLine(238, 31, 234, 60, line);
-        Path shoulder = new Path();
-        shoulder.moveTo(56, 74);
-        shoulder.cubicTo(130, 66, 260, 66, 362, 76);
+        c.drawLine(248, 32, 245, 63, line);
+        Path character = new Path();
+        character.moveTo(44, 88);
+        character.cubicTo(120, 82, 250, 80, 374, 84);
         line.setStrokeWidth(2);
-        line.setColor(Color.argb(46, 255, 255, 255));
-        c.drawPath(shoulder, line);
-        line.setColor(Color.argb(64, 0, 0, 0));
-        c.drawLine(196, 64, 194, 108, line);
+        line.setColor(Color.argb(50, 255, 255, 255));
+        c.drawPath(character, line);
+        line.setStrokeWidth(1.6f);
+        line.setColor(Color.argb(72, 0, 0, 0));
+        c.drawLine(202, 66, 200, 124, line);
+        c.drawLine(302, 60, 300, 122, line);
+        Paint sill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        sill.setColor(Color.argb(90, 0, 0, 0));
+        c.drawRect(new RectF(58, 124, 370, 128), sill);
 
-        // Vertical LED headlight signature and tail lamp
+        // Vertical LED blades: headlamp at the front corner, tail lamp at the rear
         Paint lamp = new Paint(Paint.ANTI_ALIAS_FLAG);
-        lamp.setColor(Color.argb(230, 255, 244, 214));
-        c.drawRoundRect(new RectF(27, 80, 33, 100), 3, 3, lamp);
-        lamp.setColor(Color.argb(220, 255, 64, 64));
-        c.drawRoundRect(new RectF(367, 88, 375, 100), 2, 2, lamp);
+        lamp.setColor(Color.argb(235, 255, 244, 214));
+        c.drawRoundRect(new RectF(19, 74, 25, 112), 3, 3, lamp);
+        lamp.setColor(Color.argb(230, 255, 60, 60));
+        c.drawRoundRect(new RectF(374, 86, 381, 116), 3, 3, lamp);
 
-        // Wheels
-        drawWheel(c, 100, 116, 30, darker);
-        drawWheel(c, 300, 116, 30, darker);
+        // Wheels: 20-inch, wheelbase ~61% of length
+        drawWheel(c, 92, 115, 31, darker);
+        drawWheel(c, 336, 115, 31, darker);
 
         // Charge-port bolt on the front fender (LYRIQ's port sits ahead of the driver's door).
         if (charging) {
             Paint bolt = new Paint(Paint.ANTI_ALIAS_FLAG);
             bolt.setColor(context.getColor(R.color.gauge_charging));
-            float bx = 62, by = 88, u = 5f;
+            float bx = 58, by = 100, u = 5f;
             Path p = new Path();
             p.moveTo(bx + u * 0.6f, by - u * 2.4f);
             p.lineTo(bx - u * 1.4f, by + u * 0.4f);
@@ -134,7 +146,7 @@ public final class CarRenderer {
     private static void drawWheel(Canvas c, float cx, float cy, float r, int arch) {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setColor(arch);
-        c.drawCircle(cx, cy, r + 5, p);           // wheel arch
+        c.drawCircle(cx, cy, r + 6, p);           // wheel arch
         p.setColor(0xFF15171A);
         c.drawCircle(cx, cy, r, p);               // tire
         p.setColor(0xFF9A9EA5);
