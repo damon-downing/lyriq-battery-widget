@@ -6,7 +6,7 @@
 #   AAPT_ANDROID_JAR  android.jar handed to aapt2 (default: android-33 if present, else ANDROID_JAR)
 #   BUILD_TOOLS   dir containing aapt2/dx/zipalign/apksigner (default: Debian's /usr/lib/android-sdk/build-tools/29.0.3,
 #                 falling back to $ANDROID_HOME/build-tools/<newest>)
-#   KEYSTORE / KS_PASS / KEY_ALIAS   signing config (default: keystore/lyriq-release.jks, "lyriqwidget", "lyriq")
+#   KEYSTORE / KS_PASS / KEY_ALIAS   signing config (default: keystore/lyriq-release.jks; a debug key is generated if absent)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/android-sdk}}"
@@ -25,6 +25,17 @@ fi
 KEYSTORE="${KEYSTORE:-$ROOT/keystore/lyriq-release.jks}"
 KS_PASS="${KS_PASS:-lyriqwidget}"
 KEY_ALIAS="${KEY_ALIAS:-lyriq}"
+# No release keystore (fresh clone / CI without secrets)? Generate a throwaway debug key so
+# the build still produces an installable APK. It cannot update an app signed with another key.
+if [[ ! -f "$KEYSTORE" ]]; then
+  KEYSTORE="$ROOT/keystore/debug.jks"; KS_PASS="android"; KEY_ALIAS="debug"
+  if [[ ! -f "$KEYSTORE" ]]; then
+    mkdir -p "$ROOT/keystore"
+    keytool -genkeypair -keystore "$KEYSTORE" -storepass "$KS_PASS" -keypass "$KS_PASS" -alias "$KEY_ALIAS" \
+      -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=LYRIQ Battery Widget debug" >/dev/null 2>&1
+    echo "▸ no release keystore found; generated debug keystore at $KEYSTORE"
+  fi
+fi
 
 tool() { # prefer the build-tools copy, fall back to PATH
   if [[ -x "$BUILD_TOOLS/$1" ]]; then echo "$BUILD_TOOLS/$1"; else command -v "$1"; fi

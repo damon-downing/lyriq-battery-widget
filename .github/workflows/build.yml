@@ -19,7 +19,16 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Restore release keystore (maintainer secrets; forks fall back to a debug key)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p keystore
+          echo "$KS_B64" | base64 -d > keystore/lyriq-release.jks
       - name: Build
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'lyriqwidget' }}
         run: BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0" ./build.sh
       - uses: actions/upload-artifact@v4
         with:

@@ -1,99 +1,100 @@
 # LYRIQ Battery Widget
 
-A small, dependency-free Android app whose only job is to put my Cadillac LYRIQ's
-state of charge on the Pixel home screen. Built for a Pixel 10 Pro XL (Android 16),
-works on any Android 12+ device.
+An Android home-screen widget that shows your EV's state of charge, range and charging
+state. Built for the Cadillac LYRIQ, works with any car Smartcar supports or anything
+Home Assistant can see.
 
-<p>
-<b>Widget</b>: Material You colors, resizable from 2×1 to full width. Short rows show a
-compact ring + percent + range; 2×2 / 3×2 show a big ring; 4×2 and larger show the
-vehicle name, percent, range, charge state and "Updated N min ago". Tapping the widget opens the
-myCadillac app when it is installed; tapping the ring refreshes (the whole widget refreshes
-when myCadillac is absent).
+<p align="center">
+  <img src="docs/screenshot-widget.png" alt="4x2 widget showing a red LYRIQ, 93 percent, 290 miles, plugged in" width="560">
 </p>
 
-## How the car's battery gets to the phone (research notes)
+- **Three styles**: a Material You charge ring (default), your car drawn in its paint color
+  over a battery bar, or a big percent over a slim bar. Every style has layouts for 2×1,
+  2×2 and 4×2-and-up, and the widget resizes freely.
+- **Real data, officially**: connects through [Smartcar](https://smartcar.com) with your
+  manufacturer login (API V3), or reads entities from Home Assistant.
+- **Tap to open myCadillac**, tap the ring/car/bar to refresh, long-press for settings.
+- **Tiny and dependency-free**: framework-only Java, about 60 KB, no Gradle, no AndroidX,
+  no analytics. Credentials never leave the phone.
 
-- **Inside the car / Android Auto.** The LYRIQ runs Android Automotive OS with Google
-  built-in. Google Maps there reads the pack directly from the vehicle HAL through the
-  Car API: `VehiclePropertyIds.EV_BATTERY_LEVEL` (Wh) divided by
-  `INFO_EV_BATTERY_CAPACITY`, guarded by `Car.PERMISSION_ENERGY`. On a phone running
-  Android Auto (projection) the head unit streams the same sensor data to the phone and
-  Maps uses it for range-aware routing. Neither path is exposed to third-party phone
-  apps, and Google Maps has no public "current SoC" API.
-- **Phone apps therefore need a cloud path.** GM's own myCadillac app talks to the
-  OnStar/GM Digital API. That API is undocumented, requires TOTP MFA, and the
-  reverse-engineered clients (OnStarJS2 / onstar2mqtt) break every time GM changes it.
-- **Smartcar** is the sanctioned route: an OAuth "Connect" flow where you log in with
-  your OnStar account, then a REST API returns state of charge, range and charge state
-  (V3 signals `tractionbattery-stateofcharge`, `tractionbattery-range`,
-  `charge-detailedchargingstatus`; V2 `/battery` + `/charge`). Cadillac is a supported brand;
-  the free plan covers 1 live vehicle and ~500 calls/vehicle/month, so this app defaults
-  to a 2-hour background refresh plus on-demand taps.
-- **Home Assistant** is the second supported source, for anyone already running
-  onstar2mqtt (or any integration) — the widget reads entity states via HA's REST API.
+<p align="center">
+  <img src="docs/screenshot-settings.png" alt="Settings screen with style picker and LYRIQ paint swatches" width="360">
+</p>
 
-## Widget styles
+## Install
 
-Pick one in the app under **Widget style**; every style has small / medium / large layouts.
+Download the newest APK from [`releases/`](releases) (or the latest GitHub release) onto
+your Android 12+ phone, open it, install, then follow **[docs/SETUP.md](docs/SETUP.md)**.
+The short version:
 
-- **Ring** (default): charge ring, percent, range and charge state.
-- **Car**: a side-profile LYRIQ drawn in your paint color (nine factory paints plus a custom
-  hex) above a slim battery bar; the charge-port bolt lights up while charging.
-- **Bar**: a big percent over a full-width battery bar, Tesla-widget style.
+1. Create a free app at [dashboard.smartcar.com](https://dashboard.smartcar.com).
+2. Paste its **Application ID**, **Client ID** (`client_…`) and **Client secret** into the
+   app, and register the redirect URI the app shows (`sc<ApplicationID>://exchange`).
+3. Tap **Connect vehicle**, sign in with your myCadillac / OnStar account, add the widget.
 
-Tapping the widget opens myCadillac; tapping the ring, car or bar refreshes.
+## Set it up with an AI agent
 
-## Data sources
+The repo ships agent instructions and skills so an assistant can do the setup with you:
 
-| Source | What you need | Notes |
+- `AGENTS.md` / `CLAUDE.md`: architecture, hard rules, how to verify a change.
+- `.claude/skills/setup-lyriq-widget`: guided Smartcar / Home Assistant setup with a
+  troubleshooting map for every error the app can show.
+- `.claude/skills/build-apk`: reproduces the build in a fresh sandbox, even where Google's
+  SDK hosts are blocked.
+- `.claude/skills/add-data-source`: how to add another car API.
+
+Open the repo in Claude Code (or any agent that reads `AGENTS.md`) and ask "help me set up
+the LYRIQ widget".
+
+## How the battery gets to your phone
+
+Inside the car, Google Maps reads the pack from the vehicle HAL (`EV_BATTERY_LEVEL`) on
+Android Automotive, and Android Auto streams the same data from the head unit. Neither
+path is available to third-party phone apps, and GM's own API is undocumented and
+MFA-locked. Smartcar is the sanctioned route: an OAuth "Connect" flow with your OnStar
+login, then a REST API. This app implements Smartcar's **API V3** (client-credentials app
+token, `/v3/connections`, `/v3/vehicles/{id}/signals`) with the legacy V2 exchange as a
+fallback for older dashboards.
+
+| Source | You need | Notes |
 | --- | --- | --- |
-| Smartcar (API V3, verified working with the LYRIQ) | Free app at dashboard.smartcar.com. Paste the **Application ID** (Configuration → Application details), the **Client ID** (`client_…`) and **Client secret** (API credentials tab). Register the redirect URI the app shows: `sc<ApplicationID>://exchange` | Connect uses the Application ID; the `client_…` credentials mint a 1-hour app token at `iam.smartcar.com`; the vehicle is resolved via `/v3/connections` and read from `/v3/vehicles/{id}/signals` with the `sc-user-id` from the Connect redirect. Legacy V2 credentials still work as a fallback. |
-| Home Assistant | Base URL, long-lived token, battery entity id (plus optional range / charging entities) | Works with `sensor.<car>_ev_battery_level`, `sensor.<car>_ev_range`, `binary_sensor.<car>_ev_plug_state` from onstar2mqtt. |
-| Demo / manual | nothing | Lets you place and resize the widget immediately. |
-
-Credentials live only in the app's private SharedPreferences on the phone.
-
-## Install on the phone
-
-1. Download `lyriq-battery-widget.apk` (see `releases/` in this repo or the Build APK
-   workflow artifact) to the Pixel and open it; allow installs from your browser/Files
-   app when prompted.
-2. Open **LYRIQ Battery**, pick a data source, save, and tap **Add widget** (or
-   long-press the home screen → Widgets → LYRIQ Battery).
-3. Resize by long-pressing the widget; every size from 2×1 up is supported.
+| Smartcar | Free dashboard app: Application ID, `client_…` Client ID, secret, redirect URI | 1 live vehicle and ~500 calls/month on the free plan; default refresh 120 min |
+| Home Assistant | Base URL, long-lived token, battery entity (range and charging optional) | Works with onstar2mqtt entities |
+| Demo | nothing | Place and resize the widget before connecting |
 
 ## Build
 
-No Gradle, no AGP, no AndroidX — the whole app is framework Java, so it builds with
-`aapt2`, `javac`, `dx`/`d8`, `zipalign` and `apksigner`:
-
 ```sh
-# Ubuntu: apt-get install aapt apksigner zipalign dalvik-exchange android-sdk-build-tools zip
-# plus an android.jar for API 35 at $ANDROID_HOME/platforms/android-35/ (and API 33 for old aapt2)
+# Debian/Ubuntu, no Android Studio needed
+apt-get install -y aapt apksigner zipalign dalvik-exchange android-sdk-build-tools zip
+# android.jar for API 35 (and 33 for the older aapt2) under $ANDROID_HOME/platforms/
 ANDROID_HOME=~/android-sdk ./build.sh
-# → build/out/lyriq-battery-widget.apk
+# -> build/out/lyriq-battery-widget.apk
 ```
 
-`.github/workflows/build.yml` does the same on GitHub Actions with the runner's SDK and
-attaches the APK to any `v*` tag as a release.
+`build.sh` runs `aapt2`, `javac`, `dx`/`d8`, `zipalign` and `apksigner`. With no keystore
+present it generates a debug key, so anyone can build an installable APK; the maintainer's
+release key comes from CI secrets. `.github/workflows/build.yml` builds on every push and
+attaches the APK to `v*` tag releases. See `.claude/skills/build-apk/SKILL.md` for the
+sandbox bootstrap.
 
-The release keystore (`keystore/lyriq-release.jks`, password `lyriqwidget`, alias
-`lyriq`) is committed so future builds keep the same signature and can update the
-installed app in place. This repo is private; rotate it if that changes.
-
-## Layout of the code
+## Project layout
 
 ```
-app/AndroidManifest.xml            permissions, widget receiver, job service
-app/res/xml/widget_info.xml        widget metadata (resize, min sizes, preview)
-app/res/layout/widget_*.xml        small / medium / large layouts
-app/src/.../LyriqWidgetProvider    AppWidgetProvider; RemoteViews(Map<SizeF, RemoteViews>) responsive sizing
-app/src/.../WidgetRenderer         ring gauge bitmap + text formatting
-app/src/.../SmartcarSource         OAuth token exchange/refresh + /batch fetch
-app/src/.../SmartcarConnectActivity WebView that hosts Smartcar Connect and catches the redirect
-app/src/.../HomeAssistantSource    REST /api/states reader
-app/src/.../RefreshJobService      JobScheduler periodic + expedited refresh
-app/src/.../MainActivity           settings screen
-build.sh                           the whole build pipeline
+app/AndroidManifest.xml              permissions, widget receiver, job service, myCadillac <queries>
+app/res/xml/widget_info.xml          sizes, resize modes, configure activity
+app/res/layout/widget_*.xml          ring / car / bar layouts for small, medium, large
+app/src/.../LyriqWidgetProvider      responsive RemoteViews(Map<SizeF, RemoteViews>) per style
+app/src/.../CarRenderer              LYRIQ side profile + battery bar (Canvas)
+app/src/.../WidgetRenderer           charge ring + text formatting
+app/src/.../SmartcarSource           Smartcar Connect, V3 token/connections/signals, V2 fallback
+app/src/.../HomeAssistantSource      REST /api/states reader
+app/src/.../RefreshJobService        JobScheduler periodic + expedited refresh
+app/src/.../MainActivity             settings; also the widget's reconfigure screen
+build.sh                             the build pipeline
+docs/SETUP.md                        end-user guide
 ```
+
+## License
+
+[MIT](LICENSE). Not affiliated with Cadillac, General Motors, Smartcar or Google.
