@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.omarzanji.lyriqwidget"
-    android:versionCode="3"
-    android:versionName="1.1.0">
+    android:versionCode="4"
+    android:versionName="1.2.0">
 
     <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="35" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Package visibility (API 30+) so we can find the myCadillac launcher intent. -->
+    <queries>
+        <package android:name="com.gm.cadillac.nomad.ownership" />
+        <package android:name="com.gm.myCadillac" />
+    </queries>
 
     <application
         android:label="@string/app_name"

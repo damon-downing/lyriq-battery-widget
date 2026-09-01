@@ -7,7 +7,9 @@ works on any Android 12+ device.
 <p>
 <b>Widget</b>: Material You colors, resizable from 2×1 to full width. Short rows show a
 compact ring + percent + range; 2×2 / 3×2 show a big ring; 4×2 and larger show the
-vehicle name, percent, range, charge state and "Updated N min ago". Tap to refresh.
+vehicle name, percent, range, charge state and "Updated N min ago". Tapping the widget opens the
+myCadillac app when it is installed; tapping the ring refreshes (the whole widget refreshes
+when myCadillac is absent).
 </p>
 
 ## How the car's battery gets to the phone (research notes)

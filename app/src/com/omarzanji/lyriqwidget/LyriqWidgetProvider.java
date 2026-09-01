@@ -92,9 +92,30 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
                 + WidgetRenderer.percentText(snap) + ", " + WidgetRenderer.statusLine(context, snap));
 
         Intent refresh = new Intent(context, LyriqWidgetProvider.class).setAction(ACTION_REFRESH);
-        PendingIntent pi = PendingIntent.getBroadcast(context, 0, refresh,
+        PendingIntent refreshPi = PendingIntent.getBroadcast(context, 0, refresh,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        rv.setOnClickPendingIntent(R.id.widget_root, pi);
+        PendingIntent openPi = myCadillacIntent(context);
+        if (openPi != null) {
+            // Widget body opens myCadillac; the ring stays a refresh button.
+            rv.setOnClickPendingIntent(R.id.widget_root, openPi);
+            rv.setOnClickPendingIntent(R.id.gauge, refreshPi);
+        } else {
+            rv.setOnClickPendingIntent(R.id.widget_root, refreshPi);
+        }
         return rv;
+    }
+
+    private static final String[] MYCADILLAC_PACKAGES = {"com.gm.cadillac.nomad.ownership", "com.gm.myCadillac"};
+
+    /** Launcher intent for the installed myCadillac app, or null when it isn't installed. */
+    private static PendingIntent myCadillacIntent(Context context) {
+        for (String pkg : MYCADILLAC_PACKAGES) {
+            Intent launch = context.getPackageManager().getLaunchIntentForPackage(pkg);
+            if (launch == null) continue;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            return PendingIntent.getActivity(context, 1, launch,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        }
+        return null;
     }
 }
