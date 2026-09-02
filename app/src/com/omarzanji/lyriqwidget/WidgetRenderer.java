@@ -80,7 +80,7 @@ public final class WidgetRenderer {
         return b.toString();
     }
 
-    /** "Updated 12 min ago" or the last error, or "Refreshing…". */
+    /** "Car reported 12 min ago" or the last error, or "Refreshing…". */
     public static String footer(Context context, Prefs prefs, BatterySnapshot s) {
         if (prefs.isRefreshing()) return context.getString(R.string.refreshing);
         if (s.error != null) return "Couldn't refresh · " + s.error;
@@ -89,7 +89,8 @@ public final class WidgetRenderer {
         String rel = age < DateUtils.MINUTE_IN_MILLIS ? "just now"
                 : DateUtils.getRelativeTimeSpanString(s.updatedAt, System.currentTimeMillis(),
                 DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString();
-        return "Updated " + rel;
+        // updatedAt is when the car reported the values, not when we fetched them.
+        return "Car reported " + rel;
     }
 
     public static String title(Context context, BatterySnapshot s) {

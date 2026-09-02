@@ -58,7 +58,7 @@ fallback for older dashboards.
 
 | Source | You need | Notes |
 | --- | --- | --- |
-| Smartcar | Free dashboard app: Application ID, `client_…` Client ID, secret, redirect URI | 1 live vehicle and ~500 calls/month on the free plan; default refresh 120 min |
+| Smartcar | Free dashboard app: Application ID, `client_…` Client ID, secret, redirect URI | 1 live vehicle and ~500 calls/month on the free plan; default refresh 120 min. **V3 serves cached values** — GM data refreshes about once a day unless the vehicle is subscribed to a Smartcar webhook, so the widget shows the car's own report time and only claims *Plugged in* / *Charging* when that status is under 90 min old |
 | Home Assistant | Base URL, long-lived token, battery entity (range and charging optional) | Works with onstar2mqtt entities |
 | Demo | nothing | Place and resize the widget before connecting |
 

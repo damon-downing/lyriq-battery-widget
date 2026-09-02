@@ -147,6 +147,7 @@ public final class SmartcarSource implements VehicleSource {
         int percent = -1;
         double rangeMiles = -1;
         boolean charging = false, plugged = false;
+        long socAt = 0, chargeAt = 0, plugAt = 0;
         JSONObject root = new JSONObject(r.body);
         JSONArray data = root.optJSONArray("data");
         if (data == null && root.optJSONObject("data") != null) data = new JSONArray().put(root.optJSONObject("data"));
@@ -161,24 +162,57 @@ public final class SmartcarSource implements VehicleSource {
                 JSONObject body = a.optJSONObject("body");
                 if (body == null) continue;
                 String unit = a.optString("unit", "").toLowerCase(Locale.US);
+                long at = oemUpdatedAt(item);
                 if (name.contains("tractionbattery-stateofcharge")) {
                     double v = body.optDouble("value", -1);
                     if (v >= 0) percent = (int) Math.round(v <= 1.0 && !unit.equals("percent") ? v * 100 : v);
                     if (percent > 100 && v <= 1.0) percent = (int) Math.round(v * 100);
+                    socAt = at;
                 } else if (name.contains("tractionbattery-range")) {
                     double v = body.optDouble("value", -1);
                     if (v >= 0) rangeMiles = unit.startsWith("mi") ? v : v * 0.621371;
                 } else if (name.contains("charge-detailedchargingstatus") || name.contains("charge-chargingstatus")) {
                     String s = body.optString("value", "").toUpperCase(Locale.US);
-                    charging = s.contains("CHARGING") && !s.contains("NOT") && !s.contains("DIS");
+                    charging = s.contains("CHARGING") && !s.contains("NOT") && !s.contains("DIS") && !s.contains("FULLY");
                     if (s.contains("PLUGGED") || s.contains("CONNECTED")) plugged = true;
+                    chargeAt = at;
                 } else if (name.contains("charge-ischargingcableconnected") || name.contains("charge-ispluggedin")) {
                     plugged = body.optBoolean("value", false) || "true".equalsIgnoreCase(body.optString("value", ""));
+                    plugAt = at;
                 }
             }
         }
         if (percent < 0) throw new IllegalStateException("Smartcar returned no state-of-charge signal");
-        return new BatterySnapshot(percent, rangeMiles, charging, plugged || charging, System.currentTimeMillis(), "Cadillac LYRIQ", null);
+        // Smartcar V3 serves cached values (about once a day per vehicle unless it is subscribed
+        // to a webhook), and GM's plug/charge status is documented to hold stale values. Time-stamp
+        // the snapshot with the car's own report time, and only claim a plug state that is recent.
+        long now = System.currentTimeMillis();
+        long dataAt = socAt > 0 ? socAt : now;
+        boolean chargeFresh = chargeAt > 0 && now - chargeAt < FRESH_MS;
+        boolean plugFresh = plugAt > 0 && now - plugAt < FRESH_MS;
+        charging = charging && chargeFresh;
+        plugged = (plugged && (plugFresh || chargeFresh)) || charging;
+        android.util.Log.i("LyriqRefresh", "v3: soc=" + percent + " range=" + rangeMiles + " charging=" + charging
+                + " plugged=" + plugged + " socAge=" + (now - dataAt) / 60000 + "min plugAge=" + (plugAt > 0 ? (now - plugAt) / 60000 : -1) + "min");
+        return new BatterySnapshot(percent, rangeMiles, charging, plugged, dataAt, "Cadillac LYRIQ", null);
+    }
+
+    /** Plug and charge status older than this are not shown; the OEM only refreshes them on events. */
+    private static final long FRESH_MS = 90L * 60 * 1000;
+
+    /** item.meta.oemUpdatedAt as epoch millis (ISO-8601 or a millisecond number), 0 when absent. */
+    private static long oemUpdatedAt(JSONObject item) {
+        JSONObject meta = item.optJSONObject("meta");
+        if (meta == null) return 0;
+        Object v = meta.opt("oemUpdatedAt");
+        if (v == null) v = meta.opt("retrievedAt");
+        if (v instanceof Number) return ((Number) v).longValue();
+        if (v == null) return 0;
+        try {
+            return java.time.Instant.parse(v.toString()).toEpochMilli();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     // ------------------------------------------------------------------ V2 (legacy)
