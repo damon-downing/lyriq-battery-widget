@@ -93,7 +93,10 @@ public final class WidgetRenderer {
         return "Car reported " + rel;
     }
 
-    public static String title(Context context, BatterySnapshot s) {
+    /** Your nickname for the car, else what the source reported, else a generic default. */
+    public static String title(Context context, Vehicle vehicle, BatterySnapshot s) {
+        String nick = vehicle.nickname();
+        if (!nick.isEmpty()) return nick;
         return s.vehicleName == null || s.vehicleName.isEmpty() ? context.getString(R.string.vehicle_name_default) : s.vehicleName;
     }
 }

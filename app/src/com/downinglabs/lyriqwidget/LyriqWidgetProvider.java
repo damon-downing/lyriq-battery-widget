@@ -143,7 +143,7 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
             rv.setImageViewBitmap(R.id.bar, CarRenderer.bar(context, snap, dp(context, spec.barW), dp(context, 8)));
         }
         rv.setTextViewText(R.id.percent, WidgetRenderer.percentText(snap));
-        if (spec.title) rv.setTextViewText(R.id.title, WidgetRenderer.title(context, snap));
+        if (spec.title) rv.setTextViewText(R.id.title, WidgetRenderer.title(context, vehicle, snap));
         if (spec.footer) {
             rv.setTextViewText(R.id.subtitle, WidgetRenderer.statusLine(context, snap));
             rv.setTextViewText(R.id.footer, WidgetRenderer.footer(context, vehicle, snap));
@@ -153,7 +153,7 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
                     : context.getString(R.string.no_data);
             rv.setTextViewText(R.id.subtitle, line);
         }
-        rv.setContentDescription(R.id.widget_root, WidgetRenderer.title(context, snap) + ", "
+        rv.setContentDescription(R.id.widget_root, WidgetRenderer.title(context, vehicle, snap) + ", "
                 + WidgetRenderer.percentText(snap) + ", " + WidgetRenderer.statusLine(context, snap));
 
         // widgetId is the PendingIntent request code too, so each placed instance's refresh tap
