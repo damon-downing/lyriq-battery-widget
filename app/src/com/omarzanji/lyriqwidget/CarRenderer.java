@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 
@@ -39,94 +40,163 @@ public final class CarRenderer {
         c.scale(s, s);
 
         int outline = context.getColor(R.color.widget_text);
+        int l1 = blend(color, 0xFFFFFFFF, 0.22f);
+        int l2 = blend(color, 0xFFFFFFFF, 0.45f);
+        int d1 = blend(color, 0xFF000000, 0.25f);
+        int d2 = blend(color, 0xFF000000, 0.55f);
 
-        // Ground shadow
+        // Soft ground shadow: a radial gradient squashed into an ellipse under the car.
         Paint shadow = new Paint(Paint.ANTI_ALIAS_FLAG);
-        shadow.setColor(Color.argb(72, 0, 0, 0));
-        c.drawOval(new RectF(24, 134, 376, 148), shadow);
+        shadow.setShader(new RadialGradient(0, 0, 190,
+                new int[]{Color.argb(140, 0, 0, 0), 0}, new float[]{0f, 1f}, Shader.TileMode.CLAMP));
+        c.save();
+        c.translate(204, 140);
+        c.scale(1f, 0.055f);
+        c.drawCircle(0, 0, 190, shadow);
+        c.restore();
 
-        int lighter = blend(color, 0xFFFFFFFF, 0.16f);
-        int darker = blend(color, 0xFF000000, 0.36f);
-
-        // Body, traced against the LYRIQ's proportions (196.7 in long, 121.8 in wheelbase,
-        // 63.9 in tall): upright nose, long hood, cab-forward raked windshield, arcing roof
-        // into a fastback, jutting roof spoiler, liftgate tucked under it.
+        // Body outline traced over a true side-profile photo of the LYRIQ (400x150 design
+        // space): upright nose, long flat hood, fast A-pillar, roof peaking over the front
+        // seats, long fastback into a flat spoiler, near-vertical liftgate.
         Path body = new Path();
-        body.moveTo(18, 128);
-        body.lineTo(16, 96);
-        body.cubicTo(16, 80, 22, 70, 40, 66);       // nose
-        body.cubicTo(64, 62, 102, 60, 140, 58);     // hood
-        body.cubicTo(150, 50, 158, 40, 172, 32);    // windshield
-        body.cubicTo(190, 22, 215, 20, 232, 21);    // roof crest
-        body.cubicTo(270, 22, 300, 28, 326, 42);    // roof into fastback
-        body.cubicTo(338, 49, 348, 52, 360, 51);    // spoiler
-        body.lineTo(362, 55);
-        body.cubicTo(359, 58, 356, 60, 355, 62);    // spoiler underside
-        body.cubicTo(364, 70, 373, 80, 377, 92);    // liftgate glass
-        body.cubicTo(382, 104, 384, 116, 382, 128); // rear bumper
+        body.moveTo(22, 132);
+        body.lineTo(18, 102);
+        body.cubicTo(17, 84, 20, 72, 30, 66);
+        body.cubicTo(38, 62, 60, 61, 90, 61);
+        body.cubicTo(110, 60, 130, 60, 148, 59);
+        body.cubicTo(160, 49, 176, 36, 196, 29);
+        body.cubicTo(212, 23, 236, 22, 260, 24);
+        body.cubicTo(290, 26, 318, 33, 342, 42);
+        body.cubicTo(356, 47, 370, 48, 384, 47);
+        body.lineTo(387, 52);
+        body.cubicTo(383, 56, 378, 59, 375, 61);
+        body.cubicTo(380, 72, 384, 86, 386, 100);
+        body.cubicTo(387, 114, 387, 124, 385, 132);
         body.close();
 
         Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        fill.setShader(new LinearGradient(0, 20, 0, 128,
-                new int[]{lighter, color, darker}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        c.drawPath(body, fill);
+        c.save();
+        c.clipPath(body);
+        // Studio paint: bright roof, true color at the shoulder, falling into shadow below.
+        fill.setShader(new LinearGradient(0, 22, 0, 132,
+                new int[]{l2, l1, color, d1, d2}, new float[]{0f, 0.18f, 0.42f, 0.7f, 1f}, Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, DW, DH, fill);
+        // Horizon reflection across the doors with a crisp lower edge, like a showroom render.
+        fill.setShader(new LinearGradient(0, 58, 0, 96,
+                new int[]{0x00FFFFFF, 0x61FFFFFF, 0x4DFFFFFF, 0x0FFFFFFF, 0x00FFFFFF},
+                new float[]{0f, 0.28f, 0.42f, 0.44f, 1f}, Shader.TileMode.CLAMP));
+        c.drawRect(0, 58, DW, 98, fill);
+        // Lower body falls off into darkness.
+        fill.setShader(new LinearGradient(0, 104, 0, 132,
+                new int[]{0x00000000, 0x73000000, 0xB3000000}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+        c.drawRect(0, 104, DW, 134, fill);
+        // Black wheel-arch liners and the rocker cladding.
+        Paint dark = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dark.setColor(0xFF0B0D0F);
+        c.drawCircle(94, 121, 33, dark);
+        c.drawCircle(338, 121, 33, dark);
+        Path rocker = new Path();
+        rocker.moveTo(40, 122); rocker.lineTo(378, 122); rocker.lineTo(380, 132); rocker.lineTo(30, 132); rocker.close();
+        dark.setAlpha(242);
+        c.drawPath(rocker, dark);
+        c.restore();
 
-        // Subtle outline so white cars survive light widgets and black cars survive dark ones.
-        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
-        edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(2.2f);
-        edge.setColor(Color.argb(66, Color.red(outline), Color.green(outline), Color.blue(outline)));
-        c.drawPath(body, edge);
-
-        // Side glass: rising beltline, pointed quarter window, thick body-color C-pillar behind it.
+        // Glass: dark tint with a diagonal sky reflection, then a top-down specular.
         Path glass = new Path();
-        glass.moveTo(150, 63);
-        glass.cubicTo(160, 50, 172, 40, 190, 34);
-        glass.cubicTo(220, 30, 262, 32, 296, 42);
-        glass.cubicTo(310, 46, 322, 50, 330, 52);
-        glass.lineTo(318, 58);
-        glass.lineTo(150, 65);
+        glass.moveTo(156, 66);
+        glass.cubicTo(166, 53, 182, 40, 200, 34);
+        glass.cubicTo(224, 29, 254, 30, 282, 35);
+        glass.cubicTo(308, 39, 330, 46, 348, 52);
+        glass.lineTo(354, 56);
+        glass.lineTo(318, 60);
+        glass.lineTo(158, 68);
         glass.close();
         Paint glassPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        glassPaint.setShader(new LinearGradient(0, 28, 0, 66, 0xFF2B3644, 0xFF0C1016, Shader.TileMode.CLAMP));
+        glassPaint.setShader(new LinearGradient(150, 30, 330, 70,
+                new int[]{0xFF4A5868, 0xFF1A2028, 0xFF2C3644, 0xFF0B0E12},
+                new float[]{0f, 0.35f, 0.6f, 1f}, Shader.TileMode.CLAMP));
+        c.drawPath(glass, glassPaint);
+        glassPaint.setShader(new LinearGradient(0, 30, 0, 68,
+                new int[]{0x59FFFFFF, 0x0AFFFFFF, 0x00FFFFFF}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
         c.drawPath(glass, glassPaint);
 
-        // B-pillar, character line, door seams, lower sill
         Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
         line.setStyle(Paint.Style.STROKE);
-        line.setColor(darker);
-        line.setStrokeWidth(4);
-        c.drawLine(248, 32, 245, 63, line);
-        Path character = new Path();
-        character.moveTo(44, 88);
-        character.cubicTo(120, 82, 250, 80, 374, 84);
-        line.setStrokeWidth(2);
-        line.setColor(Color.argb(50, 255, 255, 255));
-        c.drawPath(character, line);
-        line.setStrokeWidth(1.6f);
-        line.setColor(Color.argb(72, 0, 0, 0));
-        c.drawLine(202, 66, 200, 124, line);
-        c.drawLine(302, 60, 300, 122, line);
-        Paint sill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        sill.setColor(Color.argb(90, 0, 0, 0));
-        c.drawRect(new RectF(58, 124, 370, 128), sill);
+        line.setStrokeCap(Paint.Cap.ROUND);
+        // B-pillar
+        line.setColor(0xFF0B0D10); line.setStrokeWidth(3.5f);
+        c.drawLine(250, 31, 246, 63, line);
+        // Bright window surround
+        line.setColor(0x8CC8CCD2); line.setStrokeWidth(0.9f);
+        Path surround = new Path();
+        surround.moveTo(156, 66);
+        surround.cubicTo(166, 53, 182, 40, 200, 34);
+        surround.cubicTo(224, 29, 254, 30, 282, 35);
+        surround.cubicTo(308, 39, 330, 46, 348, 52);
+        surround.lineTo(354, 56);
+        c.drawPath(surround, line);
+        // Specular rim along the roof
+        line.setColor(0x8CFFFFFF); line.setStrokeWidth(1.1f);
+        Path roof = new Path();
+        roof.moveTo(150, 58);
+        roof.cubicTo(162, 48, 178, 36, 198, 30);
+        roof.cubicTo(214, 25, 238, 24, 262, 26);
+        roof.cubicTo(292, 28, 318, 35, 342, 44);
+        c.drawPath(roof, line);
+        // Shoulder line: hood edge and the crease running through the door handles
+        line.setStrokeWidth(0.8f);
+        line.setColor(0x59FFFFFF);
+        Path hood = new Path(); hood.moveTo(34, 66); hood.cubicTo(80, 62, 130, 62, 150, 60);
+        c.drawPath(hood, line);
+        line.setColor(0x47FFFFFF);
+        Path crease = new Path(); crease.moveTo(160, 70); crease.cubicTo(230, 66, 300, 62, 372, 62);
+        c.drawPath(crease, line);
+        // Door seams
+        line.setColor(0x59000000); line.setStrokeWidth(0.9f);
+        c.drawLine(206, 68, 204, 118, line);
+        c.drawLine(298, 62, 296, 118, line);
+        // Flush door handles
+        Paint chrome = new Paint(Paint.ANTI_ALIAS_FLAG);
+        chrome.setColor(0xCCE6E8EA);
+        c.drawRoundRect(new RectF(184, 73, 198, 75.2f), 1.1f, 1.1f, chrome);
+        c.drawRoundRect(new RectF(276, 69, 290, 71.2f), 1.1f, 1.1f, chrome);
+        // Mirror in body color
+        Paint mirror = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mirror.setColor(color);
+        Path m = new Path();
+        m.moveTo(148, 62); m.cubicTo(152, 58, 160, 58, 162, 62); m.lineTo(160, 68); m.lineTo(149, 68); m.close();
+        c.drawPath(m, mirror);
+        // Chrome sill strip along the lower doors
+        line.setColor(0xD9DFE2E6); line.setStrokeWidth(1.3f);
+        c.drawLine(142, 113, 330, 111, line);
 
-        // Vertical LED blades: headlamp at the front corner, tail lamp at the rear
+        // Nose: black-crystal grille panel with the vertical LED blade; thin vertical tail lamp.
         Paint lamp = new Paint(Paint.ANTI_ALIAS_FLAG);
-        lamp.setColor(Color.argb(235, 255, 244, 214));
-        c.drawRoundRect(new RectF(19, 74, 25, 112), 3, 3, lamp);
-        lamp.setColor(Color.argb(230, 255, 60, 60));
-        c.drawRoundRect(new RectF(374, 86, 381, 116), 3, 3, lamp);
+        Path grille = new Path();
+        grille.moveTo(18, 72); grille.lineTo(30, 70); grille.lineTo(30, 112); grille.lineTo(19, 114); grille.close();
+        lamp.setColor(0xD90C0E11);
+        c.drawPath(grille, lamp);
+        lamp.setColor(0xF2FFF5D6);
+        c.drawRoundRect(new RectF(20, 72, 23.2f, 112), 1.6f, 1.6f, lamp);
+        c.drawRoundRect(new RectF(24, 70, 32, 72), 1, 1, lamp);
+        lamp.setColor(0xF2FF2E2E);
+        c.drawRoundRect(new RectF(382.5f, 80, 385.5f, 116), 1.5f, 1.5f, lamp);
 
-        // Wheels: 20-inch, wheelbase ~61% of length
-        drawWheel(c, 92, 115, 31, darker);
-        drawWheel(c, 336, 115, 31, darker);
+        // Faint body edge so light paint survives light widgets and black paint survives dark ones.
+        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        edge.setStyle(Paint.Style.STROKE);
+        edge.setStrokeWidth(1f);
+        edge.setColor(Color.argb(40, Color.red(outline), Color.green(outline), Color.blue(outline)));
+        c.drawPath(body, edge);
 
-        // Charge-port bolt on the front fender (LYRIQ's port sits ahead of the driver's door).
+        drawWheel(c, 94, 121, 29);
+        drawWheel(c, 338, 121, 29);
+
+        // Charge-port bolt on the driver's front fender, just ahead of the door.
         if (charging) {
             Paint bolt = new Paint(Paint.ANTI_ALIAS_FLAG);
             bolt.setColor(context.getColor(R.color.gauge_charging));
-            float bx = 58, by = 100, u = 5f;
+            float bx = 130, by = 84, u = 4f;
             Path p = new Path();
             p.moveTo(bx + u * 0.6f, by - u * 2.4f);
             p.lineTo(bx - u * 1.4f, by + u * 0.4f);
@@ -136,30 +206,45 @@ public final class CarRenderer {
             p.lineTo(bx - u * 0.1f, by - u * 0.4f);
             p.close();
             Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
-            halo.setColor(Color.argb(200, 255, 255, 255));
-            c.drawCircle(bx, by, u * 3.2f, halo);
+            halo.setColor(Color.argb(230, 255, 255, 255));
+            c.drawCircle(bx, by, u * 2.7f, halo);
             c.drawPath(p, bolt);
         }
         return bmp;
     }
 
-    private static void drawWheel(Canvas c, float cx, float cy, float r, int arch) {
+    /** 20-inch ten-spoke alloy: tire with a lit shoulder, brushed rim, dark spokes, chrome cap. */
+    private static void drawWheel(Canvas c, float cx, float cy, float r) {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setColor(arch);
-        c.drawCircle(cx, cy, r + 6, p);           // wheel arch
-        p.setColor(0xFF15171A);
-        c.drawCircle(cx, cy, r, p);               // tire
-        p.setColor(0xFF9A9EA5);
-        c.drawCircle(cx, cy, r * 0.58f, p);       // rim
-        p.setColor(0xFF3A3D42);
-        c.drawCircle(cx, cy, r * 0.16f, p);       // hub
+        p.setShader(new RadialGradient(cx, cy, r,
+                new int[]{0xFF15171A, 0xFF15171A, 0xFF2A2D31, 0xFF101214},
+                new float[]{0f, 0.8f, 0.93f, 1f}, Shader.TileMode.CLAMP));
+        c.drawCircle(cx, cy, r, p);
+        float rr = r * 0.655f;
+        p.setShader(new RadialGradient(cx - rr * 0.24f, cy - rr * 0.3f, rr * 1.5f,
+                new int[]{0xFFF2F3F5, 0xFF9EA3AB, 0xFF4C5158},
+                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        c.drawCircle(cx, cy, rr, p);
         Paint spoke = new Paint(Paint.ANTI_ALIAS_FLAG);
-        spoke.setColor(0xFF3A3D42);
-        spoke.setStrokeWidth(r * 0.12f);
-        for (int i = 0; i < 5; i++) {
-            double a = Math.toRadians(90 + i * 72);
-            c.drawLine(cx, cy, (float) (cx + Math.cos(a) * r * 0.55f), (float) (cy + Math.sin(a) * r * 0.55f), spoke);
+        spoke.setColor(0xFF2B2F35);
+        float rIn = rr * 0.27f, rOut = rr * 0.975f, w = rr * 0.137f;
+        for (int i = 0; i < 10; i++) {
+            double a = Math.toRadians(-90 + i * 36);
+            float dx = (float) Math.cos(a), dy = (float) Math.sin(a);
+            float nx = -dy * w / 2, ny = dx * w / 2;
+            Path sp = new Path();
+            sp.moveTo(cx + dx * rIn + nx, cy + dy * rIn + ny);
+            sp.lineTo(cx + dx * rOut + nx * 0.6f, cy + dy * rOut + ny * 0.6f);
+            sp.lineTo(cx + dx * rOut - nx * 0.6f, cy + dy * rOut - ny * 0.6f);
+            sp.lineTo(cx + dx * rIn - nx, cy + dy * rIn - ny);
+            sp.close();
+            c.drawPath(sp, spoke);
         }
+        p.setShader(null);
+        p.setColor(0xFFD9DCE0);
+        c.drawCircle(cx, cy, rr * 0.21f, p);
+        p.setColor(0xFF6B7078);
+        c.drawCircle(cx, cy, rr * 0.105f, p);
     }
 
     /** Horizontal battery bar; color follows state like the ring. */
