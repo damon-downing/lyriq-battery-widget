@@ -37,8 +37,13 @@ if [[ ! -f "$KEYSTORE" ]]; then
   fi
 fi
 
-tool() { # prefer the build-tools copy, fall back to PATH
-  if [[ -x "$BUILD_TOOLS/$1" ]]; then echo "$BUILD_TOOLS/$1"; else command -v "$1"; fi
+tool() { # prefer the build-tools copy, fall back to PATH; Windows ships these as .bat/.exe
+  # (bash's -x doesn't reliably see .bat as executable under MSYS/Git-Bash, so use -f for those)
+  if [[ -x "$BUILD_TOOLS/$1" ]]; then echo "$BUILD_TOOLS/$1"; return 0; fi
+  for ext in ".bat" ".exe"; do
+    if [[ -f "$BUILD_TOOLS/$1$ext" ]]; then echo "$BUILD_TOOLS/$1$ext"; return 0; fi
+  done
+  command -v "$1" || command -v "$1.bat" || command -v "$1.exe"
 }
 AAPT2="$(tool aapt2)"; ZIPALIGN="$(tool zipalign)"; APKSIGNER="$(tool apksigner)"
 DEXER="$(tool d8 || true)"; [[ -n "$DEXER" ]] || DEXER="$(tool dx)"
@@ -54,13 +59,17 @@ echo "▸ aapt2 compile/link"
   --auto-add-overlay "$OUT/res.zip"
 
 echo "▸ javac"
-find "$ROOT/app/src" "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
+# javac.exe/d8.bat on Windows are native binaries that don't understand MSYS's /c/... paths;
+# convert with cygpath when present (Git Bash ships it), no-op elsewhere.
+winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+find "$ROOT/app/src" "$OUT/gen" -name '*.java' | while IFS= read -r f; do winpath "$f"; done > "$OUT/sources.txt"
 javac -source 8 -target 8 -encoding UTF-8 -Xlint:-options \
-  -bootclasspath "$ANDROID_JAR" -d "$OUT/classes" @"$OUT/sources.txt"
+  -bootclasspath "$(winpath "$ANDROID_JAR")" -d "$(winpath "$OUT/classes")" @"$OUT/sources.txt"
 
 echo "▸ dex ($(basename "$DEXER"))"
-if [[ "$(basename "$DEXER")" == "d8" ]]; then
-  "$DEXER" --release --min-api 31 --lib "$ANDROID_JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
+if [[ "$(basename "$DEXER")" == "d8" || "$(basename "$DEXER")" == "d8.bat" ]]; then
+  "$DEXER" --release --min-api 31 --lib "$(winpath "$ANDROID_JAR")" --output "$(winpath "$OUT/dex")" \
+    $(find "$OUT/classes" -name '*.class' | while IFS= read -r f; do winpath "$f"; done)
 else
   # dx cannot desugar lambdas/method refs; the sources deliberately avoid them.
   if find "$OUT/classes" -name '*.class' -exec javap -c -p {} + | grep -q invokedynamic; then
@@ -71,11 +80,17 @@ fi
 
 echo "▸ package"
 cp "$OUT/app.unsigned.apk" "$OUT/app.withdex.apk"
-( cd "$OUT/dex" && zip -q -u "$OUT/app.withdex.apk" classes.dex )
+# `zip` isn't shipped with Git Bash by default; the JDK's `jar` tool updates an existing
+# archive the same way (`jar uf` == `zip -u`) and we already require a JDK for javac/keytool.
+if command -v zip >/dev/null 2>&1; then
+  ( cd "$OUT/dex" && zip -q -u "$OUT/app.withdex.apk" classes.dex )
+else
+  ( cd "$OUT/dex" && jar uf "$OUT/app.withdex.apk" classes.dex )
+fi
 "$ZIPALIGN" -f -p 4 "$OUT/app.withdex.apk" "$OUT/app.aligned.apk"
 
 echo "▸ sign"
-APK="$OUT/out/lyriq-battery-widget.apk"
+APK="$OUT/out/lyriq-widget.apk"
 "$APKSIGNER" sign --ks "$KEYSTORE" --ks-pass "pass:$KS_PASS" --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KS_PASS" \
   --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out "$APK" "$OUT/app.aligned.apk"
 "$APKSIGNER" verify --print-certs "$APK" | head -3

@@ -6,3 +6,4 @@ keystore/
 .gradle/
 local.properties
 .DS_Store
+build_log.txt

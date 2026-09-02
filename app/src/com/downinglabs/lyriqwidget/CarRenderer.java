@@ -1,9 +1,8 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.BlendMode;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -13,7 +12,7 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
 
 /**
- * Draws the LYRIQ in the owner's paint colour from a pre-rendered studio image, plus the
+ * Draws the LYRIQ in the owner's paint colour from a traced photo shading map, plus the
  * horizontal battery bar used by the "car" and "bar" widget styles. Everything ends up as
  * a bitmap so it can be handed to RemoteViews and recoloured at runtime.
  */
@@ -30,43 +29,40 @@ public final class CarRenderer {
             0xFF1C3D72, 0xFF8E1220, 0xFF6D7075, 0xFF8EA4BA, 0xFF14313F,
     };
 
-    /** Pre-rendered 3/4-view layers, see tools/render3d/lyriq_model.py. Cached per process. */
-    private static Bitmap diffLayer, glossLayer, restLayer;
+    /** Traced-photo shading map (see docs/car-art.md). Grayscale luminance; cached per process. */
+    private static Bitmap shadeLayer;
 
-    private static synchronized void loadLayers(Context context) {
-        if (diffLayer != null) return;
+    private static synchronized void loadLayer(Context context) {
+        if (shadeLayer != null) return;
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inScaled = false;
         o.inPreferredConfig = Bitmap.Config.ARGB_8888;
-        diffLayer = BitmapFactory.decodeResource(context.getResources(), R.drawable.car3d_diff, o);
-        glossLayer = BitmapFactory.decodeResource(context.getResources(), R.drawable.car3d_gloss, o);
-        restLayer = BitmapFactory.decodeResource(context.getResources(), R.drawable.car3d_rest, o);
+        shadeLayer = BitmapFactory.decodeResource(context.getResources(), R.drawable.car_shade, o);
     }
 
     /**
-     * Composites the studio render in the owner's paint: the white-diffuse layer is multiplied
-     * by the colour, the clearcoat reflections are added on top, and the untinted parts (glass,
-     * wheels, lamps, ground shadow) are drawn last with the paint surfaces held out.
+     * Tints the traced shading map in the owner's paint: each pixel's grayscale value is
+     * multiplied by the paint colour (PorterDuffColorFilter, Mode.MULTIPLY), so near-white
+     * pixels (paint highlights) show the full colour and near-black pixels (tires, glass,
+     * grille, shadows) stay dark regardless of paint colour — no separate held-out layer
+     * needed the way the old diff/gloss/rest stack required.
      */
     public static Bitmap car(Context context, int color, boolean charging, int widthPx, int heightPx) {
-        loadLayers(context);
+        loadLayer(context);
         Bitmap bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
-        float iw = diffLayer.getWidth(), ih = diffLayer.getHeight();
+        float iw = shadeLayer.getWidth(), ih = shadeLayer.getHeight();
         float s = Math.min(widthPx / iw, heightPx / ih);
         RectF dst = new RectF(0, 0, iw * s, ih * s);
         dst.offset((widthPx - dst.width()) / 2f, (heightPx - dst.height()) / 2f);
 
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         p.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY));
-        c.drawBitmap(diffLayer, null, dst, p);
-        p.setColorFilter(null);
-        p.setBlendMode(BlendMode.PLUS);
-        c.drawBitmap(glossLayer, null, dst, p);
-        p.setBlendMode(null);
-        c.drawBitmap(restLayer, null, dst, p);
+        c.drawBitmap(shadeLayer, null, dst, p);
 
         // Charge-port bolt on the driver's front fender, just ahead of the door.
+        // NOTE: PORT_X/PORT_Y are estimated from the traced image, not pixel-verified on a
+        // device (no emulator in this environment, see AGENTS.md). Re-check on real hardware.
         if (charging) {
             Paint bolt = new Paint(Paint.ANTI_ALIAS_FLAG);
             bolt.setColor(context.getColor(R.color.gauge_charging));
@@ -88,8 +84,8 @@ public final class CarRenderer {
         return bmp;
     }
 
-    /** Where the charge port lands in the render, as a fraction of the image. */
-    private static final float PORT_X = 0.255f, PORT_Y = 0.43f;
+    /** Where the charge port lands in the render, as a fraction of the image. Estimated — verify on device. */
+    private static final float PORT_X = 0.20f, PORT_Y = 0.50f;
 
     /** Horizontal battery bar; color follows state like the ring. */
     public static Bitmap bar(Context context, BatterySnapshot s, int widthPx, int heightPx) {

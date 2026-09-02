@@ -1,8 +1,7 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
-import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
@@ -13,13 +12,23 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.RadioGroup;
-import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Settings screen: pick a data source, connect it, and place the widget. */
-public final class MainActivity extends Activity {
-    private Prefs prefs;
+/**
+ * Add/edit screen for exactly one vehicle. Reached only from VehicleListActivity — never the
+ * launcher, and never opens with a saved secret already on screen unless the user chose to
+ * edit that specific vehicle. Save always returns to the list (or, when placing a new widget,
+ * binds the widget to this vehicle and returns straight to the OS placement flow).
+ */
+public final class VehicleConfigActivity extends Activity {
+    public static final String EXTRA_VEHICLE_ID = "vehicle_id";
+    public static final String EXTRA_APPWIDGET_ID = AppWidgetManager.EXTRA_APPWIDGET_ID;
+
+    private VehicleStore store;
+    private Vehicle vehicle;
+    private boolean registered;
+    private int pendingWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
 
     private RadioGroup sourceGroup, styleGroup;
     private View sectionCarColor;
@@ -28,25 +37,25 @@ public final class MainActivity extends Activity {
     private TextView colorName;
     private int selectedColor;
     private View sectionSmartcar, sectionHa, sectionManual;
-    private EditText scClientId, scTokenClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes;
+    private EditText scClientId, scTokenClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes, nickname;
     private CheckBox scSimulated, manualCharging;
-    private TextView scRedirectUri, scStatus, manualLabel, statusPercent, statusLine;
-    private SeekBar manualPercent;
+    private TextView scRedirectUri, scStatus, statusPercent, statusLine, manualLabel;
+    private android.widget.SeekBar manualPercent;
     private ImageView statusGauge;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        prefs = new Prefs(this);
-        setContentView(R.layout.activity_main);
+        store = new VehicleStore(this);
 
-        // Opened from the launcher's long-press "settings" (reconfigure) action: tell the host the
-        // widget id is fine as-is, so backing out never deletes the widget. Settings apply on Save.
-        int widgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
-        if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-            setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
-        }
+        String vehicleId = getIntent().getStringExtra(EXTRA_VEHICLE_ID);
+        registered = vehicleId != null;
+        vehicle = store.get(registered ? vehicleId : store.newId());
+        pendingWidgetId = getIntent().getIntExtra(EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
 
+        setContentView(R.layout.activity_vehicle_config);
+
+        nickname = findViewById(R.id.nickname);
         sourceGroup = findViewById(R.id.source_group);
         styleGroup = findViewById(R.id.style_group);
         sectionCarColor = findViewById(R.id.section_car_color);
@@ -81,7 +90,7 @@ public final class MainActivity extends Activity {
             @Override
             public void onCheckedChanged(RadioGroup g, int id) {
                 sectionCarColor.setVisibility(id == R.id.style_car ? View.VISIBLE : View.GONE);
-                renderStatus(prefs.snapshot());
+                renderStatus(vehicle.snapshot());
             }
         });
         carColorHex.addTextChangedListener(new TextWatcher() {
@@ -89,7 +98,7 @@ public final class MainActivity extends Activity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(Editable s) {
                 Integer c = parseHex(s.toString());
-                if (c != null && c != selectedColor) { selectedColor = c; buildSwatches(); renderStatus(prefs.snapshot()); }
+                if (c != null && c != selectedColor) { selectedColor = c; buildSwatches(); renderStatus(vehicle.snapshot()); }
             }
         });
         sourceGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
@@ -101,29 +110,20 @@ public final class MainActivity extends Activity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(Editable s) { updateRedirectUri(); }
         });
-        manualPercent.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar sb, int p, boolean u) { manualLabel.setText("Battery: " + p + "%"); }
-            public void onStartTrackingTouch(SeekBar sb) {}
-            public void onStopTrackingTouch(SeekBar sb) {}
+        manualPercent.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(android.widget.SeekBar sb, int p, boolean u) { manualLabel.setText("Battery: " + p + "%"); }
+            public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+            public void onStopTrackingTouch(android.widget.SeekBar sb) {}
         });
 
         Button save = findViewById(R.id.btn_save);
         save.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (saveForm()) {
-                    Toast.makeText(MainActivity.this, "Saved", Toast.LENGTH_SHORT).show();
-                    refresh();
-                }
-            }
+            public void onClick(View v) { saveAndReturn(); }
         });
         findViewById(R.id.btn_refresh).setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) { if (saveForm()) refresh(); }
-        });
-        findViewById(R.id.btn_add_widget).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) { requestPin(); }
+            public void onClick(View v) { saveForm(); refresh(); }
         });
         findViewById(R.id.btn_sc_connect).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -132,9 +132,9 @@ public final class MainActivity extends Activity {
         findViewById(R.id.btn_sc_disconnect).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                prefs.clearSmartcarConnection();
+                vehicle.clearSmartcarConnection();
                 updateSmartcarStatus();
-                Toast.makeText(MainActivity.this, "Disconnected", Toast.LENGTH_SHORT).show();
+                Toast.makeText(VehicleConfigActivity.this, "Disconnected", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -142,40 +142,41 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        renderStatus(prefs.snapshot());
+        renderStatus(vehicle.snapshot());
         updateSmartcarStatus();
     }
 
     private void loadIntoForm() {
-        switch (prefs.source()) {
-            case VehicleSource.SMARTCAR: sourceGroup.check(R.id.source_smartcar); break;
+        nickname.setText(vehicle.nickname());
+        switch (vehicle.source()) {
             case VehicleSource.HOME_ASSISTANT: sourceGroup.check(R.id.source_ha); break;
-            default: sourceGroup.check(R.id.source_manual);
+            case VehicleSource.MANUAL: sourceGroup.check(R.id.source_manual); break;
+            default: sourceGroup.check(R.id.source_smartcar);
         }
         showSection(sourceGroup.getCheckedRadioButtonId());
-        switch (prefs.widgetStyle()) {
-            case Prefs.STYLE_CAR: styleGroup.check(R.id.style_car); break;
-            case Prefs.STYLE_BAR: styleGroup.check(R.id.style_bar); break;
+        switch (vehicle.widgetStyle()) {
+            case Vehicle.STYLE_CAR: styleGroup.check(R.id.style_car); break;
+            case Vehicle.STYLE_BAR: styleGroup.check(R.id.style_bar); break;
             default: styleGroup.check(R.id.style_ring);
         }
-        sectionCarColor.setVisibility(prefs.widgetStyle().equals(Prefs.STYLE_CAR) ? View.VISIBLE : View.GONE);
-        selectedColor = prefs.carColor();
+        sectionCarColor.setVisibility(vehicle.widgetStyle().equals(Vehicle.STYLE_CAR) ? View.VISIBLE : View.GONE);
+        selectedColor = vehicle.carColor();
         carColorHex.setText(String.format(java.util.Locale.US, "#%06X", selectedColor & 0xFFFFFF));
         buildSwatches();
-        scClientId.setText(prefs.scClientId());
-        scTokenClientId.setText(prefs.scTokenClientId());
-        scClientSecret.setText(prefs.scClientSecret());
-        scSimulated.setChecked(prefs.scSimulated());
+        scClientId.setText(vehicle.scClientId());
+        scTokenClientId.setText(vehicle.scTokenClientId());
+        scClientSecret.setText(vehicle.scClientSecret());
+        scSimulated.setChecked(vehicle.scSimulated());
         updateRedirectUri();
-        haUrl.setText(prefs.haUrl());
-        haToken.setText(prefs.haToken());
-        haEntityBattery.setText(prefs.haEntityBattery());
-        haEntityRange.setText(prefs.haEntityRange());
-        haEntityCharging.setText(prefs.haEntityCharging());
-        manualPercent.setProgress(prefs.manualPercent());
-        manualLabel.setText("Battery: " + prefs.manualPercent() + "%");
-        manualCharging.setChecked(prefs.manualCharging());
-        refreshMinutes.setText(String.valueOf(prefs.refreshMinutes()));
+        haUrl.setText(vehicle.haUrl());
+        haToken.setText(vehicle.haToken());
+        haEntityBattery.setText(vehicle.haEntityBattery());
+        haEntityRange.setText(vehicle.haEntityRange());
+        haEntityCharging.setText(vehicle.haEntityCharging());
+        manualPercent.setProgress(vehicle.manualPercent());
+        manualLabel.setText("Battery: " + vehicle.manualPercent() + "%");
+        manualCharging.setChecked(vehicle.manualCharging());
+        refreshMinutes.setText(String.valueOf(vehicle.refreshMinutes()));
     }
 
     private void showSection(int checkedId) {
@@ -190,59 +191,75 @@ public final class MainActivity extends Activity {
     }
 
     private void updateSmartcarStatus() {
-        if (!prefs.scConnected()) { scStatus.setText("Not connected"); return; }
-        String v = prefs.scVehicleId();
-        scStatus.setText("Connected (" + prefs.scApiVersion().toUpperCase(java.util.Locale.US) + ")"
+        if (!vehicle.scConnected()) { scStatus.setText("Not connected"); return; }
+        String v = vehicle.scVehicleId();
+        scStatus.setText("Connected (" + vehicle.scApiVersion().toUpperCase(java.util.Locale.US) + ")"
                 + (v.isEmpty() ? "" : " · vehicle " + v.substring(0, Math.min(8, v.length())) + "…"));
     }
 
-    /** Persists the form. Returns false (with a toast) when a required field is missing. */
-    private boolean saveForm() {
+    /** Persists the form onto {@link #vehicle} and registers it in the store if it's new. */
+    private void saveForm() {
         int checked = sourceGroup.getCheckedRadioButtonId();
-        String source = checked == R.id.source_smartcar ? VehicleSource.SMARTCAR
-                : checked == R.id.source_ha ? VehicleSource.HOME_ASSISTANT : VehicleSource.MANUAL;
-        prefs.setSmartcarApp(scClientId.getText().toString(), scTokenClientId.getText().toString(), scClientSecret.getText().toString(), scSimulated.isChecked());
-        prefs.setHomeAssistant(haUrl.getText().toString(), haToken.getText().toString(),
+        String source = checked == R.id.source_ha ? VehicleSource.HOME_ASSISTANT
+                : checked == R.id.source_manual ? VehicleSource.MANUAL : VehicleSource.SMARTCAR;
+        vehicle.setNickname(nickname.getText().toString());
+        vehicle.setSmartcarApp(scClientId.getText().toString(), scTokenClientId.getText().toString(), scClientSecret.getText().toString(), scSimulated.isChecked());
+        vehicle.setHomeAssistant(haUrl.getText().toString(), haToken.getText().toString(),
                 haEntityBattery.getText().toString(), haEntityRange.getText().toString(), haEntityCharging.getText().toString());
-        prefs.setManual(manualPercent.getProgress(), manualCharging.isChecked());
+        vehicle.setManual(manualPercent.getProgress(), manualCharging.isChecked());
         int minutes;
         try { minutes = Integer.parseInt(refreshMinutes.getText().toString().trim()); } catch (NumberFormatException e) { minutes = 0; }
         if (minutes < 15) {
             minutes = VehicleSource.SMARTCAR.equals(source) ? 120 : 30;
             refreshMinutes.setText(String.valueOf(minutes));
         }
-        prefs.setRefreshMinutes(minutes);
-        prefs.setSource(source);
+        vehicle.setRefreshMinutes(minutes);
+        vehicle.setSource(source);
         int styleId = styleGroup.getCheckedRadioButtonId();
-        prefs.setWidgetStyle(styleId == R.id.style_car ? Prefs.STYLE_CAR : styleId == R.id.style_bar ? Prefs.STYLE_BAR : Prefs.STYLE_RING);
+        vehicle.setWidgetStyle(styleId == R.id.style_car ? Vehicle.STYLE_CAR : styleId == R.id.style_bar ? Vehicle.STYLE_BAR : Vehicle.STYLE_RING);
         Integer hex = parseHex(carColorHex.getText().toString());
-        prefs.setCarColor(hex != null ? hex : selectedColor);
+        vehicle.setCarColor(hex != null ? hex : selectedColor);
+        if (!registered) { store.register(vehicle.id); registered = true; }
         Scheduler.schedulePeriodic(this);
-        LyriqWidgetProvider.updateAll(this);
-        return true;
+    }
+
+    /** Save button: persist, then either bind the in-progress widget placement or go back to the list. */
+    private void saveAndReturn() {
+        saveForm();
+        if (pendingWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            store.bindWidget(pendingWidgetId, vehicle.id);
+            LyriqWidgetProvider.updateForVehicle(this, vehicle.id);
+            setResult(RESULT_OK);
+        } else {
+            LyriqWidgetProvider.updateForVehicle(this, vehicle.id);
+            Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
+        }
+        finish();
     }
 
     private void connectSmartcar() {
-        if (!saveForm()) return;
-        if (prefs.scClientId().isEmpty() || prefs.scClientSecret().isEmpty()) {
+        saveForm();
+        if (vehicle.scClientId().isEmpty() || vehicle.scClientSecret().isEmpty()) {
             Toast.makeText(this, "Enter the Smartcar client ID and secret first", Toast.LENGTH_LONG).show();
             return;
         }
         sourceGroup.check(R.id.source_smartcar);
-        startActivity(new Intent(this, SmartcarConnectActivity.class));
+        startActivity(new Intent(this, SmartcarConnectActivity.class)
+                .putExtra(SmartcarConnectActivity.EXTRA_VEHICLE_ID, vehicle.id));
     }
 
     private void refresh() {
         statusLine.setText("Refreshing…");
+        final String id = vehicle.id;
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final BatterySnapshot snap = Refresher.refreshNow(MainActivity.this);
+                final BatterySnapshot snap = Refresher.refreshVehicle(VehicleConfigActivity.this, id);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         renderStatus(snap);
-                        if (snap.error != null) Toast.makeText(MainActivity.this, snap.error, Toast.LENGTH_LONG).show();
+                        if (snap.error != null) Toast.makeText(VehicleConfigActivity.this, snap.error, Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -251,7 +268,7 @@ public final class MainActivity extends Activity {
 
     private String currentStyle() {
         int id = styleGroup.getCheckedRadioButtonId();
-        return id == R.id.style_car ? Prefs.STYLE_CAR : id == R.id.style_bar ? Prefs.STYLE_BAR : Prefs.STYLE_RING;
+        return id == R.id.style_car ? Vehicle.STYLE_CAR : id == R.id.style_bar ? Vehicle.STYLE_BAR : Vehicle.STYLE_RING;
     }
 
     private static Integer parseHex(String text) {
@@ -287,7 +304,7 @@ public final class MainActivity extends Activity {
                     selectedColor = color;
                     carColorHex.setText(String.format(java.util.Locale.US, "#%06X", color & 0xFFFFFF));
                     buildSwatches();
-                    renderStatus(prefs.snapshot());
+                    renderStatus(vehicle.snapshot());
                 }
             });
             colorRow.addView(v);
@@ -297,21 +314,12 @@ public final class MainActivity extends Activity {
 
     private void renderStatus(BatterySnapshot snap) {
         float d = getResources().getDisplayMetrics().density;
-        if (Prefs.STYLE_CAR.equals(currentStyle())) {
+        if (Vehicle.STYLE_CAR.equals(currentStyle())) {
             statusGauge.setImageBitmap(CarRenderer.car(this, selectedColor, snap.charging, Math.round(130 * d), Math.round(50 * d)));
         } else {
             statusGauge.setImageBitmap(WidgetRenderer.gauge(this, snap, Math.round(84 * d)));
         }
         statusPercent.setText(WidgetRenderer.percentText(snap));
-        statusLine.setText(WidgetRenderer.statusLine(this, snap) + "\n" + WidgetRenderer.footer(this, prefs, snap));
-    }
-
-    private void requestPin() {
-        AppWidgetManager m = getSystemService(AppWidgetManager.class);
-        if (m != null && m.isRequestPinAppWidgetSupported()) {
-            m.requestPinAppWidget(new ComponentName(this, LyriqWidgetProvider.class), null, null);
-        } else {
-            Toast.makeText(this, "Long-press the home screen → Widgets → LYRIQ Battery", Toast.LENGTH_LONG).show();
-        }
+        statusLine.setText(WidgetRenderer.statusLine(this, snap) + "\n" + WidgetRenderer.footer(this, vehicle, snap));
     }
 }

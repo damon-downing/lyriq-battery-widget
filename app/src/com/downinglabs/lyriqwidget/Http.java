@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

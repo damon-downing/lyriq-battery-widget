@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import org.json.JSONObject;
 
@@ -9,10 +9,10 @@ import java.util.Map;
 /** Reads entity states from Home Assistant's REST API (/api/states/<entity_id>). */
 public final class HomeAssistantSource implements VehicleSource {
     @Override
-    public BatterySnapshot fetch(Prefs prefs) throws Exception {
-        String base = prefs.haUrl();
-        String token = prefs.haToken();
-        String batteryEntity = prefs.haEntityBattery();
+    public BatterySnapshot fetch(Vehicle vehicle) throws Exception {
+        String base = vehicle.haUrl();
+        String token = vehicle.haToken();
+        String batteryEntity = vehicle.haEntityBattery();
         if (base.isEmpty() || token.isEmpty() || batteryEntity.isEmpty()) {
             throw new IllegalStateException("Home Assistant URL, token and battery entity are required");
         }
@@ -24,8 +24,8 @@ public final class HomeAssistantSource implements VehicleSource {
         if (percent < 0 || percent > 100) throw new IllegalStateException("Battery entity state is not a percentage: " + battery.optString("state"));
 
         double rangeMiles = -1;
-        if (!prefs.haEntityRange().isEmpty()) {
-            JSONObject range = state(base, headers, prefs.haEntityRange());
+        if (!vehicle.haEntityRange().isEmpty()) {
+            JSONObject range = state(base, headers, vehicle.haEntityRange());
             double v = parseNumber(range.optString("state"));
             if (!Double.isNaN(v)) {
                 String unit = range.optJSONObject("attributes") == null ? "" : range.optJSONObject("attributes").optString("unit_of_measurement", "");
@@ -34,8 +34,8 @@ public final class HomeAssistantSource implements VehicleSource {
         }
 
         boolean charging = false;
-        if (!prefs.haEntityCharging().isEmpty()) {
-            String s = state(base, headers, prefs.haEntityCharging()).optString("state", "").toLowerCase(Locale.US);
+        if (!vehicle.haEntityCharging().isEmpty()) {
+            String s = state(base, headers, vehicle.haEntityCharging()).optString("state", "").toLowerCase(Locale.US);
             charging = s.equals("on") || s.equals("true") || s.contains("charging") && !s.contains("not");
         }
 

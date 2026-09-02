@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -13,11 +13,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Home-screen widget. Uses the Android 12+ responsive RemoteViews API: the launcher picks
- * the largest layout whose declared size fits the cell area the user resized to.
+ * Home-screen widget. Each placed instance (appWidgetId) is bound to exactly one Vehicle via
+ * VehicleStore, set during the configure flow (VehicleListActivity). Uses the Android 12+
+ * responsive RemoteViews API: the launcher picks the largest layout whose declared size fits
+ * the cell area the user resized to.
  */
 public final class LyriqWidgetProvider extends AppWidgetProvider {
-    public static final String ACTION_REFRESH = "com.omarzanji.lyriqwidget.REFRESH";
+    public static final String ACTION_REFRESH = "com.downinglabs.lyriqwidget.REFRESH";
+    public static final String EXTRA_WIDGET_ID = AppWidgetManager.EXTRA_APPWIDGET_ID;
 
     private static final SizeF SMALL = new SizeF(110f, 40f);   // any short row: 2x1, 3x1, 4x1
     private static final SizeF MEDIUM = new SizeF(120f, 140f); // 2x2, 3x2 (needs real height for the ring)
@@ -25,18 +28,20 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
-        Prefs prefs = new Prefs(context);
-        BatterySnapshot snap = prefs.snapshot();
-        for (int id : ids) manager.updateAppWidget(id, build(context, prefs, snap));
-        // Data older than the refresh interval? Fetch in the background.
-        long stale = prefs.refreshMinutes() * 60_000L;
-        if (snap.updatedAt == 0 || System.currentTimeMillis() - snap.updatedAt > stale) Scheduler.refreshSoon(context);
+        VehicleStore store = new VehicleStore(context);
+        for (int id : ids) updateOne(context, manager, store, id);
+    }
+
+    @Override
+    public void onDeleted(Context context, int[] appWidgetIds) {
+        VehicleStore store = new VehicleStore(context);
+        for (int id : appWidgetIds) store.unbindWidget(id);
     }
 
     @Override
     public void onEnabled(Context context) {
         Scheduler.schedulePeriodic(context);
-        Scheduler.refreshSoon(context);
+        Scheduler.refreshDueSoon(context);
     }
 
     @Override
@@ -47,22 +52,36 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (ACTION_REFRESH.equals(intent.getAction())) {
-            Prefs prefs = new Prefs(context);
-            prefs.setRefreshing(true);
-            updateAll(context);
-            Scheduler.refreshSoon(context);
+            int widgetId = intent.getIntExtra(EXTRA_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            VehicleStore store = new VehicleStore(context);
+            String vehicleId = widgetId == AppWidgetManager.INVALID_APPWIDGET_ID ? null : store.vehicleIdForWidget(widgetId);
+            if (vehicleId != null) {
+                store.get(vehicleId).setRefreshing(true);
+                updateForVehicle(context, vehicleId);
+                Scheduler.refreshSoon(context, vehicleId);
+            }
             return;
         }
         super.onReceive(context, intent);
     }
 
-    public static void updateAll(Context context) {
+    /** Repaints just the widgets bound to one vehicle (after editing it, or after a refresh). */
+    public static void updateForVehicle(Context context, String vehicleId) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
-        int[] ids = manager.getAppWidgetIds(new ComponentName(context, LyriqWidgetProvider.class));
-        if (ids.length == 0) return;
-        Prefs prefs = new Prefs(context);
-        BatterySnapshot snap = prefs.snapshot();
-        for (int id : ids) manager.updateAppWidget(id, build(context, prefs, snap));
+        VehicleStore store = new VehicleStore(context);
+        for (int id : store.widgetIdsForVehicle(vehicleId)) updateOne(context, manager, store, id);
+    }
+
+    private static void updateOne(Context context, AppWidgetManager manager, VehicleStore store, int widgetId) {
+        String vehicleId = store.vehicleIdForWidget(widgetId);
+        if (vehicleId == null) return; // placed but not configured yet; the OS configure flow will follow up
+        Vehicle vehicle = store.get(vehicleId);
+        BatterySnapshot snap = vehicle.snapshot();
+        manager.updateAppWidget(widgetId, build(context, widgetId, vehicle, snap));
+        long stale = vehicle.refreshMinutes() * 60_000L;
+        if (snap.updatedAt == 0 || System.currentTimeMillis() - snap.updatedAt > stale) {
+            Scheduler.refreshSoon(context, vehicleId);
+        }
     }
 
     /** Which views a layout contains, so we never touch an id that isn't there. */
@@ -78,13 +97,13 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
 
     private static Spec[] specs(String style) {
         switch (style) {
-            case Prefs.STYLE_CAR:
+            case Vehicle.STYLE_CAR:
                 return new Spec[]{
                         new Spec(R.layout.widget_car_small, Spec.HERO_CAR, 80, 36, 0, false, false),
                         new Spec(R.layout.widget_car_medium, Spec.HERO_CAR, 160, 70, 140, false, false),
                         new Spec(R.layout.widget_car_large, Spec.HERO_CAR, 200, 90, 140, true, true),
                 };
-            case Prefs.STYLE_BAR:
+            case Vehicle.STYLE_BAR:
                 return new Spec[]{
                         new Spec(R.layout.widget_bar_small, Spec.HERO_NONE, 0, 0, 110, false, false),
                         new Spec(R.layout.widget_bar_medium, Spec.HERO_NONE, 0, 0, 120, true, false),
@@ -99,12 +118,12 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static RemoteViews build(Context context, Prefs prefs, BatterySnapshot snap) {
-        Spec[] sp = specs(prefs.widgetStyle());
+    private static RemoteViews build(Context context, int widgetId, Vehicle vehicle, BatterySnapshot snap) {
+        Spec[] sp = specs(vehicle.widgetStyle());
         Map<SizeF, RemoteViews> views = new HashMap<>();
-        views.put(SMALL, layout(context, prefs, snap, sp[0]));
-        views.put(MEDIUM, layout(context, prefs, snap, sp[1]));
-        views.put(LARGE, layout(context, prefs, snap, sp[2]));
+        views.put(SMALL, layout(context, widgetId, vehicle, snap, sp[0]));
+        views.put(MEDIUM, layout(context, widgetId, vehicle, snap, sp[1]));
+        views.put(LARGE, layout(context, widgetId, vehicle, snap, sp[2]));
         return new RemoteViews(views);
     }
 
@@ -112,12 +131,12 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         return Math.round(dp * context.getResources().getDisplayMetrics().density);
     }
 
-    private static RemoteViews layout(Context context, Prefs prefs, BatterySnapshot snap, Spec spec) {
+    private static RemoteViews layout(Context context, int widgetId, Vehicle vehicle, BatterySnapshot snap, Spec spec) {
         RemoteViews rv = new RemoteViews(context.getPackageName(), spec.layout);
         if (spec.hero == Spec.HERO_RING) {
             rv.setImageViewBitmap(R.id.gauge, WidgetRenderer.gauge(context, snap, dp(context, spec.heroW)));
         } else if (spec.hero == Spec.HERO_CAR) {
-            rv.setImageViewBitmap(R.id.gauge, CarRenderer.car(context, prefs.carColor(), snap.charging,
+            rv.setImageViewBitmap(R.id.gauge, CarRenderer.car(context, vehicle.carColor(), snap.charging,
                     dp(context, spec.heroW), dp(context, spec.heroH)));
         }
         if (spec.barW > 0) {
@@ -127,9 +146,9 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         if (spec.title) rv.setTextViewText(R.id.title, WidgetRenderer.title(context, snap));
         if (spec.footer) {
             rv.setTextViewText(R.id.subtitle, WidgetRenderer.statusLine(context, snap));
-            rv.setTextViewText(R.id.footer, WidgetRenderer.footer(context, prefs, snap));
+            rv.setTextViewText(R.id.footer, WidgetRenderer.footer(context, vehicle, snap));
         } else {
-            String line = prefs.isRefreshing() ? context.getString(R.string.refreshing)
+            String line = vehicle.isRefreshing() ? context.getString(R.string.refreshing)
                     : snap.hasData() ? WidgetRenderer.statusLine(context, snap)
                     : context.getString(R.string.no_data);
             rv.setTextViewText(R.id.subtitle, line);
@@ -137,8 +156,12 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         rv.setContentDescription(R.id.widget_root, WidgetRenderer.title(context, snap) + ", "
                 + WidgetRenderer.percentText(snap) + ", " + WidgetRenderer.statusLine(context, snap));
 
-        Intent refresh = new Intent(context, LyriqWidgetProvider.class).setAction(ACTION_REFRESH);
-        PendingIntent refreshPi = PendingIntent.getBroadcast(context, 0, refresh,
+        // widgetId is the PendingIntent request code too, so each placed instance's refresh tap
+        // stays distinct from every other instance's (otherwise FLAG_UPDATE_CURRENT would collide them).
+        Intent refresh = new Intent(context, LyriqWidgetProvider.class)
+                .setAction(ACTION_REFRESH)
+                .putExtra(EXTRA_WIDGET_ID, widgetId);
+        PendingIntent refreshPi = PendingIntent.getBroadcast(context, widgetId, refresh,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent openPi = myCadillacIntent(context);
         if (openPi != null) {

@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -81,8 +81,8 @@ public final class WidgetRenderer {
     }
 
     /** "Updated 12 min ago" or the last error, or "Refreshing…". */
-    public static String footer(Context context, Prefs prefs, BatterySnapshot s) {
-        if (prefs.isRefreshing()) return context.getString(R.string.refreshing);
+    public static String footer(Context context, Vehicle vehicle, BatterySnapshot s) {
+        if (vehicle.isRefreshing()) return context.getString(R.string.refreshing);
         if (s.error != null) return "Couldn't refresh · " + s.error;
         if (s.updatedAt <= 0) return context.getString(R.string.tap_to_refresh);
         long age = System.currentTimeMillis() - s.updatedAt;

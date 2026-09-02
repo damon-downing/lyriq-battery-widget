@@ -75,18 +75,46 @@ docs/SETUP.md                end-user setup guide (Smartcar, Home Assistant)
 - `.claude/skills/build-apk` — reproduce the Gradle-free build in a fresh environment.
 - `.claude/skills/add-data-source` — add a new `VehicleSource` (another API or car brand).
 
-## The car image is a pre-rendered 3D layer stack
+## The car image is a traced-photo shading map
 
-`CarRenderer.car()` no longer draws a silhouette. It composites three PNGs from
-`app/res/drawable-nodpi/` that are rendered by `tools/render3d/lyriq_model.py` (a
-procedural LYRIQ built in Blender from the same 400x150 side-profile trace):
+`CarRenderer.car()` composites a single traced-photo shading map from
+`app/res/drawable-nodpi/car_shade.png`. The source is a VTracer color-quantized vector trace
+of the owner's own car photo, kept as `tools/car_trace_source.svg` (regenerate by tracing a
+new photo with VTracer, not by editing pixels). Because the trace is tonal
+(grayscale-ish, not flat), a single `PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY)`
+reproduces the shading in any paint colour: near-white pixels take the full paint colour,
+near-black pixels (tires, glass, grille, shadows) stay dark regardless of colour. This
+replaced the earlier Blender-procedural three-layer stack (`car3d_diff/gloss/rest.png`,
+`tools/render3d/lyriq_model.py`) — the technique is simpler (one layer, one multiply,
+no held-out "rest" pass) and looks more like a real car because it starts from a real
+photo instead of hand-modeled geometry.
 
-- `car3d_diff.png` — paint with a white base, diffuse only → multiplied by the owner's colour
-- `car3d_gloss.png` — clearcoat reflections over a black base → added (`BlendMode.PLUS`)
-- `car3d_rest.png` — glass, wheels, lamps, ground shadow, with paint surfaces held out
+To regenerate the asset from a new source photo:
+1. Isolate the car on a plain near-white background (crop/remove background).
+2. Vectorize with VTracer (`vtracer --input photo.png --output trace.svg`) — not potrace;
+   potrace collapses everything to one flat silhouette with no shading detail and can't be
+   multiply-tinted convincingly.
+3. Rasterize the SVG to a PNG ~1100px wide. `cairosvg` needs a native libcairo binary that
+   Windows doesn't ship by default; `tools/build_car_shade.py`/`tools/finish_car_shade.py`
+   fall back to an Edge headless screenshot of an HTML wrapper (`msedge --headless
+   --screenshot=... --window-size=W,H file:///wrapper.html`) instead of fighting that install.
+4. Flood-fill the *connected* near-white background region to transparent (alpha=0) — do
+   NOT chroma-key by color globally, since on-car highlights can share the background's
+   near-white tone; only pixels reachable from the image border without crossing a
+   non-background pixel should go transparent.
+5. Replace `car_shade.png`; delete the old file if renaming.
 
-Re-render with `Blender -b -P tools/render3d/lyriq_model.py -- OUT 1400 640 160`, trim the
-three outputs to a common bounding box and downscale to ~1100 px wide before replacing the
-drawables (all three must keep identical dimensions). Keep the diffuse layer unclipped
-(no pixel near 255) or light paints wash out; lower the light energies rather than the
-view transform. `PORT_X`/`PORT_Y` in `CarRenderer` locate the charge port in the image.
+`PORT_X`/`PORT_Y` in `CarRenderer` locate the charge port in the image and are currently
+**estimated, not verified on a device** — there is no emulator in most agent sandboxes
+(see "Verifying a change" above); check the charge-port bolt position against a real
+install and adjust if it's off.
+
+## TEMP: demo/manual vehicle source
+
+Restored (Sep 2026) purely to let dual-widget testing happen without a second real Smartcar
+account: `ManualSource.java`, `VehicleSource.MANUAL`, the "Demo / manual value" radio button
+and `section_manual` in `activity_vehicle_config.xml`, and `Vehicle.manualPercent()` /
+`manualCharging()` / `setManual()`. Once dual-widget testing is done, remove all of the
+above — grep for "TEMP" to find every touch point. This is NOT the same thing as Smartcar's
+own "simulated vehicle" checkbox (`sc_simulated`), which is a real Smartcar API feature that
+still requires real credentials and goes through the real Connect OAuth flow.

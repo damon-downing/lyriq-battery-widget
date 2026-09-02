@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -14,17 +14,21 @@ import android.widget.Toast;
 /**
  * Hosts Smartcar Connect in a WebView and intercepts the sc<clientId>://exchange redirect.
  * Intercepting in-app lets the redirect scheme depend on the client ID typed at runtime,
- * which a static manifest intent-filter cannot do.
+ * which a static manifest intent-filter cannot do. Operates on one specific Vehicle, passed
+ * in via EXTRA_VEHICLE_ID, so two vehicles can each connect their own Smartcar app.
  */
 public final class SmartcarConnectActivity extends Activity {
+    public static final String EXTRA_VEHICLE_ID = "vehicle_id";
+
     private WebView web;
     private boolean handled;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        final Prefs prefs = new Prefs(this);
-        final String redirect = SmartcarSource.redirectUri(prefs.scClientId());
+        final String vehicleId = getIntent().getStringExtra(EXTRA_VEHICLE_ID);
+        final Vehicle vehicle = new VehicleStore(this).get(vehicleId);
+        final String redirect = SmartcarSource.redirectUri(vehicle.scClientId());
 
         web = new WebView(this);
         WebSettings s = web.getSettings();
@@ -35,32 +39,32 @@ public final class SmartcarConnectActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return intercept(request.getUrl(), prefs, redirect);
+                return intercept(request.getUrl(), vehicle, redirect);
             }
 
             @Override
             @SuppressWarnings("deprecation")
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return intercept(Uri.parse(url), prefs, redirect);
+                return intercept(Uri.parse(url), vehicle, redirect);
             }
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 // A server-side 302 to the custom scheme can bypass shouldOverrideUrlLoading; catch it here.
-                if (intercept(Uri.parse(url), prefs, redirect)) view.stopLoading();
+                if (intercept(Uri.parse(url), vehicle, redirect)) view.stopLoading();
             }
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
-                if (request.isForMainFrame() && intercept(request.getUrl(), prefs, redirect)) return;
+                if (request.isForMainFrame() && intercept(request.getUrl(), vehicle, redirect)) return;
                 super.onReceivedError(view, request, error);
             }
         });
         setContentView(web);
-        web.loadUrl(SmartcarSource.authorizeUrl(prefs));
+        web.loadUrl(SmartcarSource.authorizeUrl(vehicle));
     }
 
-    private boolean intercept(Uri uri, final Prefs prefs, String redirect) {
+    private boolean intercept(Uri uri, final Vehicle vehicle, String redirect) {
         if (uri == null || handled) return false;
         String url = uri.toString();
         // URL schemes are case-insensitive and Smartcar client IDs can contain capitals.
@@ -79,9 +83,9 @@ public final class SmartcarConnectActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    SmartcarSource.completeConnect(prefs, code, userId);
-                    prefs.setSource(VehicleSource.SMARTCAR);
-                    Refresher.refreshNow(SmartcarConnectActivity.this);
+                    SmartcarSource.completeConnect(vehicle, code, userId);
+                    vehicle.setSource(VehicleSource.SMARTCAR);
+                    Refresher.refreshVehicle(SmartcarConnectActivity.this, vehicle.id);
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {

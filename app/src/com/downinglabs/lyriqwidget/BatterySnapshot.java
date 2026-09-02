@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 /** Last known vehicle state, persisted in Prefs so the widget can render offline. */
 public final class BatterySnapshot {

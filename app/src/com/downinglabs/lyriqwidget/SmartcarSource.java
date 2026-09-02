@@ -1,4 +1,4 @@
-package com.omarzanji.lyriqwidget;
+package com.downinglabs.lyriqwidget;
 
 import android.util.Base64;
 
@@ -22,7 +22,8 @@ import java.util.Map;
  *    with refresh tokens, and api.smartcar.com/v2.0 endpoints.
  *
  * We use V3 whenever a client_... id is configured and the redirect carried a user_id,
- * otherwise fall back to V2.
+ * otherwise fall back to V2. Every credential/token lives on the specific Vehicle passed in,
+ * so two vehicles can each be connected to their own Smartcar app independently.
  */
 public final class SmartcarSource implements VehicleSource {
     static final String AUTH_URL = "https://connect.smartcar.com/oauth/authorize";
@@ -37,14 +38,14 @@ public final class SmartcarSource implements VehicleSource {
         return "sc" + clientId.trim() + "://exchange";
     }
 
-    static String authorizeUrl(Prefs prefs) {
-        String clientId = prefs.scClientId();
+    static String authorizeUrl(Vehicle vehicle) {
+        String clientId = vehicle.scClientId();
         return AUTH_URL
                 + "?response_type=code"
                 + "&client_id=" + enc(clientId)
                 + "&redirect_uri=" + enc(redirectUri(clientId))
                 + "&scope=" + enc(SCOPES)
-                + "&mode=" + (prefs.scSimulated() ? "simulated" : "live")
+                + "&mode=" + (vehicle.scSimulated() ? "simulated" : "live")
                 + "&approval_prompt=auto"
                 + "&single_select=true";
     }
@@ -56,44 +57,44 @@ public final class SmartcarSource implements VehicleSource {
     // ------------------------------------------------------------------ connect
 
     /** Completes the Connect flow after the redirect. userId may be null on legacy apps. */
-    static void completeConnect(Prefs prefs, String code, String userId) throws Exception {
-        boolean v3 = !prefs.scTokenClientId().isEmpty() && userId != null && !userId.isEmpty();
+    static void completeConnect(Vehicle vehicle, String code, String userId) throws Exception {
+        boolean v3 = !vehicle.scTokenClientId().isEmpty() && userId != null && !userId.isEmpty();
         if (v3) {
-            prefs.setScUserId(userId);
-            prefs.setScApiVersion("v3");
-            prefs.setScVehicleId("");
-            String token = appToken(prefs);
-            prefs.setScVehicleId(findVehicleV3(prefs, token, userId));
+            vehicle.setScUserId(userId);
+            vehicle.setScApiVersion("v3");
+            vehicle.setScVehicleId("");
+            String token = appToken(vehicle);
+            vehicle.setScVehicleId(findVehicleV3(vehicle, token, userId));
         } else {
-            prefs.setScApiVersion("v2");
-            exchangeCodeV2(prefs, code);
-            prefs.setScVehicleId("");
+            vehicle.setScApiVersion("v2");
+            exchangeCodeV2(vehicle, code);
+            vehicle.setScVehicleId("");
         }
     }
 
     // ------------------------------------------------------------------ V3
 
-    /** Client-credentials application token (1 hour). Cached in prefs until near expiry. */
-    private static String appToken(Prefs prefs) throws Exception {
-        if (!prefs.scAccessToken().isEmpty() && System.currentTimeMillis() < prefs.scExpiresAt() - 60_000L) {
-            return prefs.scAccessToken();
+    /** Client-credentials application token (1 hour). Cached on the vehicle until near expiry. */
+    private static String appToken(Vehicle vehicle) throws Exception {
+        if (!vehicle.scAccessToken().isEmpty() && System.currentTimeMillis() < vehicle.scExpiresAt() - 60_000L) {
+            return vehicle.scAccessToken();
         }
         JSONObject body = new JSONObject()
                 .put("grant_type", "client_credentials")
-                .put("client_id", prefs.scTokenClientId())
-                .put("client_secret", prefs.scClientSecret());
+                .put("client_id", vehicle.scTokenClientId())
+                .put("client_secret", vehicle.scClientSecret());
         Http.Response r = Http.request("POST", TOKEN_URL_V3, null, body.toString(), "application/json");
         if (!r.ok()) {
             // Some deployments want form encoding instead of JSON; try once more.
-            String form = "grant_type=client_credentials&client_id=" + enc(prefs.scTokenClientId())
-                    + "&client_secret=" + enc(prefs.scClientSecret());
+            String form = "grant_type=client_credentials&client_id=" + enc(vehicle.scTokenClientId())
+                    + "&client_secret=" + enc(vehicle.scClientSecret());
             Http.Response r2 = Http.request("POST", TOKEN_URL_V3, null, form, "application/x-www-form-urlencoded");
             if (!r2.ok()) throw new IllegalStateException("Smartcar API-credentials error (" + r.code + "): " + errorMessage(r.body));
             r = r2;
         }
         JSONObject j = new JSONObject(r.body);
         long expiresAt = System.currentTimeMillis() + j.optLong("expires_in", 3600) * 1000L;
-        prefs.setScTokens(j.getString("access_token"), "", expiresAt);
+        vehicle.setScTokens(j.getString("access_token"), "", expiresAt);
         return j.getString("access_token");
     }
 
@@ -104,7 +105,7 @@ public final class SmartcarSource implements VehicleSource {
         return h;
     }
 
-    private static String findVehicleV3(Prefs prefs, String token, String userId) throws Exception {
+    private static String findVehicleV3(Vehicle vehicle, String token, String userId) throws Exception {
         Http.Response r = Http.request("GET", API_V3 + "/connections", v3Headers(token, userId), null, null);
         if (!r.ok()) throw new IllegalStateException("Smartcar connections error (" + r.code + "): " + errorMessage(r.body));
         JSONArray data = new JSONObject(r.body).optJSONArray("data");
@@ -129,17 +130,17 @@ public final class SmartcarSource implements VehicleSource {
         return first;
     }
 
-    private static BatterySnapshot fetchV3(Prefs prefs) throws Exception {
-        String token = appToken(prefs);
-        String userId = prefs.scUserId();
-        String vehicleId = prefs.scVehicleId();
+    private static BatterySnapshot fetchV3(Vehicle vehicle) throws Exception {
+        String token = appToken(vehicle);
+        String userId = vehicle.scUserId();
+        String vehicleId = vehicle.scVehicleId();
         if (vehicleId.isEmpty()) {
-            vehicleId = findVehicleV3(prefs, token, userId);
-            prefs.setScVehicleId(vehicleId);
+            vehicleId = findVehicleV3(vehicle, token, userId);
+            vehicle.setScVehicleId(vehicleId);
         }
         Http.Response r = Http.request("GET", API_V3 + "/vehicles/" + vehicleId + "/signals", v3Headers(token, userId), null, null);
         if (r.code == 401) {
-            prefs.setScTokens("", "", 0);
+            vehicle.setScTokens("", "", 0);
             throw new IllegalStateException("Smartcar token expired — refresh again");
         }
         if (!r.ok()) throw new IllegalStateException("Smartcar signals error (" + r.code + "): " + errorMessage(r.body));
@@ -183,20 +184,20 @@ public final class SmartcarSource implements VehicleSource {
 
     // ------------------------------------------------------------------ V2 (legacy)
 
-    private static void exchangeCodeV2(Prefs prefs, String code) throws Exception {
+    private static void exchangeCodeV2(Vehicle vehicle, String code) throws Exception {
         String body = "grant_type=authorization_code&code=" + enc(code)
-                + "&redirect_uri=" + enc(redirectUri(prefs.scClientId()));
-        tokenRequestV2(prefs, body);
+                + "&redirect_uri=" + enc(redirectUri(vehicle.scClientId()));
+        tokenRequestV2(vehicle, body);
     }
 
-    private static void tokenRequestV2(Prefs prefs, String body) throws Exception {
+    private static void tokenRequestV2(Vehicle vehicle, String body) throws Exception {
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
-        if (!prefs.scTokenClientId().isEmpty()) ids.add(prefs.scTokenClientId());
-        ids.add(prefs.scClientId());
+        if (!vehicle.scTokenClientId().isEmpty()) ids.add(vehicle.scTokenClientId());
+        ids.add(vehicle.scClientId());
         Http.Response last = null;
         for (String id : ids) {
             Map<String, String> headers = new HashMap<>();
-            String basic = id + ":" + prefs.scClientSecret();
+            String basic = id + ":" + vehicle.scClientSecret();
             headers.put("Authorization", "Basic " + Base64.encodeToString(basic.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
             last = Http.request("POST", TOKEN_URL_V2, headers, body, "application/x-www-form-urlencoded");
             if (last.ok() || (last.code != 401 && last.code != 403)) break;
@@ -207,15 +208,15 @@ public final class SmartcarSource implements VehicleSource {
         }
         JSONObject j = new JSONObject(last.body);
         long expiresAt = System.currentTimeMillis() + j.optLong("expires_in", 7200) * 1000L;
-        prefs.setScTokens(j.getString("access_token"), j.getString("refresh_token"), expiresAt);
+        vehicle.setScTokens(j.getString("access_token"), j.getString("refresh_token"), expiresAt);
     }
 
-    private static String accessTokenV2(Prefs prefs) throws Exception {
-        if (prefs.scRefreshToken().isEmpty()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
-        if (prefs.scAccessToken().isEmpty() || System.currentTimeMillis() > prefs.scExpiresAt() - 60_000L) {
-            tokenRequestV2(prefs, "grant_type=refresh_token&refresh_token=" + enc(prefs.scRefreshToken()));
+    private static String accessTokenV2(Vehicle vehicle) throws Exception {
+        if (vehicle.scRefreshToken().isEmpty()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
+        if (vehicle.scAccessToken().isEmpty() || System.currentTimeMillis() > vehicle.scExpiresAt() - 60_000L) {
+            tokenRequestV2(vehicle, "grant_type=refresh_token&refresh_token=" + enc(vehicle.scRefreshToken()));
         }
-        return prefs.scAccessToken();
+        return vehicle.scAccessToken();
     }
 
     private static Map<String, String> v2Headers(String token) {
@@ -225,16 +226,16 @@ public final class SmartcarSource implements VehicleSource {
         return h;
     }
 
-    private static BatterySnapshot fetchV2(Prefs prefs) throws Exception {
-        String token = accessTokenV2(prefs);
-        String vehicleId = prefs.scVehicleId();
+    private static BatterySnapshot fetchV2(Vehicle vehicle) throws Exception {
+        String token = accessTokenV2(vehicle);
+        String vehicleId = vehicle.scVehicleId();
         if (vehicleId.isEmpty()) {
             Http.Response r = Http.request("GET", API_V2 + "/vehicles", v2Headers(token), null, null);
             if (!r.ok()) throw new IllegalStateException("Smartcar vehicles error (" + r.code + "): " + errorMessage(r.body));
             JSONArray ids = new JSONObject(r.body).getJSONArray("vehicles");
             if (ids.length() == 0) throw new IllegalStateException("No vehicle authorized on this Smartcar connection");
             vehicleId = ids.getString(0);
-            prefs.setScVehicleId(vehicleId);
+            vehicle.setScVehicleId(vehicleId);
         }
         JSONObject batch = new JSONObject().put("requests", new JSONArray()
                 .put(new JSONObject().put("path", "/battery"))
@@ -243,7 +244,7 @@ public final class SmartcarSource implements VehicleSource {
         Http.Response r = Http.request("POST", API_V2 + "/vehicles/" + vehicleId + "/batch", v2Headers(token),
                 batch.toString(), "application/json");
         if (r.code == 401) {
-            prefs.setScTokens("", prefs.scRefreshToken(), 0);
+            vehicle.setScTokens("", vehicle.scRefreshToken(), 0);
             throw new IllegalStateException("Smartcar session expired — refresh again");
         }
         if (!r.ok()) throw new IllegalStateException("Smartcar batch error (" + r.code + "): " + errorMessage(r.body));
@@ -284,9 +285,9 @@ public final class SmartcarSource implements VehicleSource {
     // ------------------------------------------------------------------ entry point
 
     @Override
-    public BatterySnapshot fetch(Prefs prefs) throws Exception {
-        if (!prefs.scConnected()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
-        return "v3".equals(prefs.scApiVersion()) ? fetchV3(prefs) : fetchV2(prefs);
+    public BatterySnapshot fetch(Vehicle vehicle) throws Exception {
+        if (!vehicle.scConnected()) throw new IllegalStateException("Not connected — open the app and tap Connect vehicle");
+        return "v3".equals(vehicle.scApiVersion()) ? fetchV3(vehicle) : fetchV2(vehicle);
     }
 
     private static String errorMessage(String body) {
