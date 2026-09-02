@@ -32,6 +32,41 @@ The short version:
    app, and register the redirect URI the app shows (`sc<ApplicationID>://exchange`).
 3. Tap **Connect vehicle**, sign in with your myCadillac / OnStar account, add the widget.
 
+## Keep the data fresh: subscribe the car to a webhook
+
+Smartcar's V3 API hands back **cached** signals and only re-reads a vehicle about once a
+day — unless that vehicle is subscribed to a webhook, which makes Smartcar poll GM every
+30–45 minutes. Without this step the widget shows yesterday's charge and says
+"Car reported 22 hr ago". The widget never receives the webhook payloads itself; the
+subscription just keeps the cache it polls fresh.
+
+`tools/smartcar-webhook/` is a tiny Cloudflare Worker that answers Smartcar's one-time
+verification challenge and checks `SC-Signature` on deliveries. It stores nothing. Free tier.
+
+1. Deploy it (needs a free Cloudflare account):
+   ```sh
+   cd tools/smartcar-webhook
+   npx wrangler login
+   # edit wrangler.toml: either keep workers_dev and drop the routes block, or set
+   # routes to a hostname on a zone you own (as configured here)
+   npx wrangler deploy
+   ```
+2. In the Smartcar Dashboard → Configuration → **Regenerate** the *Application management
+   token* and use its copy button (⌘C in the masked field copies nothing), then:
+   ```sh
+   pbpaste | tr -d '\n\r ' | npx wrangler secret put SMARTCAR_AMT
+   curl https://<your-worker-host>/health      # {"ok":true,"configured":true}
+   ```
+3. Dashboard → Integrations → **Create integration → Webhook**: trigger and data signal
+   `TractionBattery.StateOfCharge` (add `Range`), callback URI
+   `https://<your-worker-host>/smartcar/webhook`, then **Add and verify webhook**.
+4. Dashboard → Vehicles → ⋯ on your car → **Subscribe** → pick the webhook. Fresh data
+   shows up within a few minutes; tap the widget to pull it.
+
+Free-plan limits: the `Charge` signal group (plug / charging state) and vehicle
+auto-subscribe are paid, so charge level and range are the reliable part and the widget
+only shows *Plugged in* / *Charging* when that status is under 90 minutes old.
+
 ## Set it up with an AI agent
 
 The repo ships agent instructions and skills so an assistant can do the setup with you:
@@ -58,7 +93,7 @@ fallback for older dashboards.
 
 | Source | You need | Notes |
 | --- | --- | --- |
-| Smartcar | Free dashboard app: Application ID, `client_…` Client ID, secret, redirect URI | 1 live vehicle and ~500 calls/month on the free plan; default refresh 120 min |
+| Smartcar | Free dashboard app: Application ID, `client_…` Client ID, secret, redirect URI | 1 live vehicle and ~500 calls/month on the free plan; default refresh 120 min. **V3 serves cached values** — GM data refreshes about once a day unless the vehicle is subscribed to a Smartcar webhook, so the widget shows the car's own report time and only claims *Plugged in* / *Charging* when that status is under 90 min old |
 | Home Assistant | Base URL, long-lived token, battery entity (range and charging optional) | Works with onstar2mqtt entities |
 | Demo | nothing | Place and resize the widget before connecting |
 
