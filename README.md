@@ -5,7 +5,7 @@ state. Built for the Cadillac LYRIQ, works with any car Smartcar supports or any
 Home Assistant can see.
 
 <p align="center">
-  <img src="docs/screenshot-widget.png" alt="4x2 widget showing a red LYRIQ, 93 percent, 290 miles, plugged in" width="560">
+  <img src="docs/screenshot-widget.png" alt="2x2 and 4x1 widgets showing a blue LYRIQ studio render, 72 percent, 226 miles, charging" width="520">
 </p>
 
 - **Three styles**: a Material You charge ring (default), your car drawn in its paint color
