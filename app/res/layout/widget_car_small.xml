@@ -13,8 +13,8 @@
 
     <ImageView
         android:id="@+id/gauge"
-        android:layout_width="76dp"
-        android:layout_height="30dp"
+        android:layout_width="80dp"
+        android:layout_height="36dp"
         android:contentDescription="@null" />
 
     <LinearLayout

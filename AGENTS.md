@@ -74,3 +74,19 @@ docs/SETUP.md                end-user setup guide (Smartcar, Home Assistant)
 - `.claude/skills/setup-lyriq-widget` — walk a user through Smartcar/Home Assistant setup and install.
 - `.claude/skills/build-apk` — reproduce the Gradle-free build in a fresh environment.
 - `.claude/skills/add-data-source` — add a new `VehicleSource` (another API or car brand).
+
+## The car image is a pre-rendered 3D layer stack
+
+`CarRenderer.car()` no longer draws a silhouette. It composites three PNGs from
+`app/res/drawable-nodpi/` that are rendered by `tools/render3d/lyriq_model.py` (a
+procedural LYRIQ built in Blender from the same 400x150 side-profile trace):
+
+- `car3d_diff.png` — paint with a white base, diffuse only → multiplied by the owner's colour
+- `car3d_gloss.png` — clearcoat reflections over a black base → added (`BlendMode.PLUS`)
+- `car3d_rest.png` — glass, wheels, lamps, ground shadow, with paint surfaces held out
+
+Re-render with `Blender -b -P tools/render3d/lyriq_model.py -- OUT 1400 640 160`, trim the
+three outputs to a common bounding box and downscale to ~1100 px wide before replacing the
+drawables (all three must keep identical dimensions). Keep the diffuse layer unclipped
+(no pixel near 255) or light paints wash out; lower the light energies rather than the
+view transform. `PORT_X`/`PORT_Y` in `CarRenderer` locate the charge port in the image.

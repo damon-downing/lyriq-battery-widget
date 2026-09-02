@@ -80,9 +80,9 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         switch (style) {
             case Prefs.STYLE_CAR:
                 return new Spec[]{
-                        new Spec(R.layout.widget_car_small, Spec.HERO_CAR, 76, 30, 0, false, false),
-                        new Spec(R.layout.widget_car_medium, Spec.HERO_CAR, 160, 52, 140, false, false),
-                        new Spec(R.layout.widget_car_large, Spec.HERO_CAR, 200, 64, 140, true, true),
+                        new Spec(R.layout.widget_car_small, Spec.HERO_CAR, 80, 36, 0, false, false),
+                        new Spec(R.layout.widget_car_medium, Spec.HERO_CAR, 160, 70, 140, false, false),
+                        new Spec(R.layout.widget_car_large, Spec.HERO_CAR, 200, 90, 140, true, true),
                 };
             case Prefs.STYLE_BAR:
                 return new Spec[]{
