@@ -316,6 +316,8 @@ public final class VehicleConfigActivity extends Activity {
         float d = getResources().getDisplayMetrics().density;
         if (Vehicle.STYLE_CAR.equals(currentStyle())) {
             statusGauge.setImageBitmap(CarRenderer.car(this, selectedColor, snap.charging, Math.round(130 * d), Math.round(50 * d)));
+        } else if (Vehicle.STYLE_BAR.equals(currentStyle())) {
+            statusGauge.setImageBitmap(CarRenderer.bar(this, snap, Math.round(140 * d), Math.round(14 * d)));
         } else {
             statusGauge.setImageBitmap(WidgetRenderer.gauge(this, snap, Math.round(84 * d)));
         }
