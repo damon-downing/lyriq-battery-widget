@@ -78,8 +78,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
-            <RadioButton android:id="@+id/style_ring" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ring — charge ring with percent and range (default)" />
-            <RadioButton android:id="@+id/style_car" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Car — your LYRIQ in its paint color with a battery bar" />
+            <RadioButton android:id="@+id/style_car" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Car — your LYRIQ in its paint color with a battery bar (default)" />
+            <RadioButton android:id="@+id/style_ring" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ring — charge ring with percent and range" />
             <RadioButton android:id="@+id/style_bar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bar — big percent over a slim battery bar" />
         </RadioGroup>
 

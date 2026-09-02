@@ -38,7 +38,7 @@ public final class Vehicle {
 
     // ---- widget look ----
     public static final String STYLE_RING = "ring", STYLE_CAR = "car", STYLE_BAR = "bar";
-    public String widgetStyle() { return sp.getString(k("widget_style"), STYLE_RING); }
+    public String widgetStyle() { return sp.getString(k("widget_style"), STYLE_CAR); }
     public void setWidgetStyle(String s) { sp.edit().putString(k("widget_style"), s).apply(); }
     public int carColor() { return sp.getInt(k("car_color"), CarRenderer.PAINT_COLORS[5]); }
     public void setCarColor(int argb) { sp.edit().putInt(k("car_color"), argb).apply(); }
