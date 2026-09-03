@@ -138,6 +138,9 @@
                 android:textIsSelectable="true" android:textSize="13sp" android:fontFamily="monospace" android:textColor="@color/widget_text" android:paddingTop="6dp" android:paddingBottom="6dp" />
 
             <CheckBox android:id="@+id/sc_simulated" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Use a Smartcar simulated vehicle (test mode)" />
+            <TextView style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                android:text="Vehicle ID override, optional — paste from the dashboard's Vehicles tab to pick a specific one (e.g. a vehicle created in the Simulator) instead of whatever Connect finds automatically." />
+            <EditText android:id="@+id/sc_vehicle_id" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Vehicle ID (leave blank for automatic)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                 <Button android:id="@+id/btn_sc_connect" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Connect vehicle" />

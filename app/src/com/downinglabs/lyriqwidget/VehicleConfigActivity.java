@@ -37,7 +37,7 @@ public final class VehicleConfigActivity extends Activity {
     private TextView colorName;
     private int selectedColor;
     private View sectionSmartcar, sectionHa, sectionManual;
-    private EditText scClientId, scTokenClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes, nickname;
+    private EditText scClientId, scTokenClientId, scClientSecret, scVehicleIdField, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes, nickname;
     private CheckBox scSimulated, manualCharging;
     private TextView scRedirectUri, scStatus, statusPercent, statusLine, manualLabel;
     private android.widget.SeekBar manualPercent;
@@ -68,6 +68,7 @@ public final class VehicleConfigActivity extends Activity {
         scClientId = findViewById(R.id.sc_client_id);
         scTokenClientId = findViewById(R.id.sc_token_client_id);
         scClientSecret = findViewById(R.id.sc_client_secret);
+        scVehicleIdField = findViewById(R.id.sc_vehicle_id);
         scSimulated = findViewById(R.id.sc_simulated);
         scRedirectUri = findViewById(R.id.sc_redirect_uri);
         scStatus = findViewById(R.id.sc_status);
@@ -166,6 +167,7 @@ public final class VehicleConfigActivity extends Activity {
         scClientId.setText(vehicle.scClientId());
         scTokenClientId.setText(vehicle.scTokenClientId());
         scClientSecret.setText(vehicle.scClientSecret());
+        scVehicleIdField.setText(vehicle.scVehicleId());
         scSimulated.setChecked(vehicle.scSimulated());
         updateRedirectUri();
         haUrl.setText(vehicle.haUrl());
@@ -204,6 +206,7 @@ public final class VehicleConfigActivity extends Activity {
                 : checked == R.id.source_manual ? VehicleSource.MANUAL : VehicleSource.SMARTCAR;
         vehicle.setNickname(nickname.getText().toString());
         vehicle.setSmartcarApp(scClientId.getText().toString(), scTokenClientId.getText().toString(), scClientSecret.getText().toString(), scSimulated.isChecked());
+        vehicle.setScVehicleId(scVehicleIdField.getText().toString().trim());
         vehicle.setHomeAssistant(haUrl.getText().toString(), haToken.getText().toString(),
                 haEntityBattery.getText().toString(), haEntityRange.getText().toString(), haEntityCharging.getText().toString());
         vehicle.setManual(manualPercent.getProgress(), manualCharging.isChecked());
