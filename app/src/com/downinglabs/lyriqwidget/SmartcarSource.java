@@ -187,7 +187,10 @@ public final class SmartcarSource implements VehicleSource {
                 }
             }
         }
-        if (percent < 0) throw new IllegalStateException("Smartcar returned no state-of-charge signal");
+        if (percent < 0) {
+            android.util.Log.w("LyriqRefresh", "v3: no SoC signal found, raw body: " + r.body);
+            throw new IllegalStateException("Smartcar returned no state-of-charge signal");
+        }
         // Smartcar V3 serves cached values (about once a day per vehicle unless it is subscribed
         // to a webhook), and GM's plug/charge status is documented to hold stale values. Time-stamp
         // the snapshot with the car's own report time, and only claim a plug state that is recent.
