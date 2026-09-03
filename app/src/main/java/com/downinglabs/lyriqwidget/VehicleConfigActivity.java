@@ -36,8 +36,8 @@ public final class VehicleConfigActivity extends Activity {
     private EditText carColorHex;
     private TextView colorName;
     private int selectedColor;
-    private View sectionSmartcar, sectionHa, sectionManual;
-    private EditText scClientId, scTokenClientId, scClientSecret, haUrl, haToken, haEntityBattery, haEntityRange, haEntityCharging, refreshMinutes, nickname;
+    private View sectionSmartcar, sectionManual;
+    private EditText scClientId, scTokenClientId, scClientSecret, refreshMinutes, nickname;
     private CheckBox manualCharging;
     private TextView scRedirectUri, scStatus, statusPercent, statusLine, manualLabel;
     private android.widget.SeekBar manualPercent;
@@ -63,18 +63,12 @@ public final class VehicleConfigActivity extends Activity {
         carColorHex = findViewById(R.id.car_color_hex);
         colorName = findViewById(R.id.color_name);
         sectionSmartcar = findViewById(R.id.section_smartcar);
-        sectionHa = findViewById(R.id.section_ha);
         sectionManual = findViewById(R.id.section_manual);
         scClientId = findViewById(R.id.sc_client_id);
         scTokenClientId = findViewById(R.id.sc_token_client_id);
         scClientSecret = findViewById(R.id.sc_client_secret);
         scRedirectUri = findViewById(R.id.sc_redirect_uri);
         scStatus = findViewById(R.id.sc_status);
-        haUrl = findViewById(R.id.ha_url);
-        haToken = findViewById(R.id.ha_token);
-        haEntityBattery = findViewById(R.id.ha_entity_battery);
-        haEntityRange = findViewById(R.id.ha_entity_range);
-        haEntityCharging = findViewById(R.id.ha_entity_charging);
         manualLabel = findViewById(R.id.manual_label);
         manualPercent = findViewById(R.id.manual_percent);
         manualCharging = findViewById(R.id.manual_charging);
@@ -148,7 +142,6 @@ public final class VehicleConfigActivity extends Activity {
     private void loadIntoForm() {
         nickname.setText(vehicle.nickname());
         switch (vehicle.source()) {
-            case VehicleSource.HOME_ASSISTANT: sourceGroup.check(R.id.source_ha); break;
             case VehicleSource.MANUAL: sourceGroup.check(R.id.source_manual); break;
             default: sourceGroup.check(R.id.source_smartcar);
         }
@@ -166,11 +159,6 @@ public final class VehicleConfigActivity extends Activity {
         scTokenClientId.setText(vehicle.scTokenClientId());
         scClientSecret.setText(vehicle.scClientSecret());
         updateRedirectUri();
-        haUrl.setText(vehicle.haUrl());
-        haToken.setText(vehicle.haToken());
-        haEntityBattery.setText(vehicle.haEntityBattery());
-        haEntityRange.setText(vehicle.haEntityRange());
-        haEntityCharging.setText(vehicle.haEntityCharging());
         manualPercent.setProgress(vehicle.manualPercent());
         manualLabel.setText("Battery: " + vehicle.manualPercent() + "%");
         manualCharging.setChecked(vehicle.manualCharging());
@@ -179,13 +167,11 @@ public final class VehicleConfigActivity extends Activity {
 
     private void showSection(int checkedId) {
         sectionSmartcar.setVisibility(checkedId == R.id.source_smartcar ? View.VISIBLE : View.GONE);
-        sectionHa.setVisibility(checkedId == R.id.source_ha ? View.VISIBLE : View.GONE);
         sectionManual.setVisibility(checkedId == R.id.source_manual ? View.VISIBLE : View.GONE);
     }
 
     private void updateRedirectUri() {
-        String id = scClientId.getText().toString().trim();
-        scRedirectUri.setText(id.isEmpty() ? "Redirect URI: (enter client ID)" : "Redirect URI: " + SmartcarSource.redirectUri(id));
+        scRedirectUri.setText("Redirect URI to register: " + SmartcarSource.REDIRECT_URI);
     }
 
     private void updateSmartcarStatus() {
@@ -198,12 +184,9 @@ public final class VehicleConfigActivity extends Activity {
     /** Persists the form onto {@link #vehicle} and registers it in the store if it's new. */
     private void saveForm() {
         int checked = sourceGroup.getCheckedRadioButtonId();
-        String source = checked == R.id.source_ha ? VehicleSource.HOME_ASSISTANT
-                : checked == R.id.source_manual ? VehicleSource.MANUAL : VehicleSource.SMARTCAR;
+        String source = checked == R.id.source_manual ? VehicleSource.MANUAL : VehicleSource.SMARTCAR;
         vehicle.setNickname(nickname.getText().toString());
         vehicle.setSmartcarApp(scClientId.getText().toString(), scTokenClientId.getText().toString(), scClientSecret.getText().toString());
-        vehicle.setHomeAssistant(haUrl.getText().toString(), haToken.getText().toString(),
-                haEntityBattery.getText().toString(), haEntityRange.getText().toString(), haEntityCharging.getText().toString());
         vehicle.setManual(manualPercent.getProgress(), manualCharging.isChecked());
         int minutes;
         try { minutes = Integer.parseInt(refreshMinutes.getText().toString().trim()); } catch (NumberFormatException e) { minutes = 0; }

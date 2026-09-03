@@ -26,29 +26,18 @@ import java.util.Map;
  * so two vehicles can each be connected to their own Smartcar app independently.
  */
 public final class SmartcarSource implements VehicleSource {
-    static final String AUTH_URL = "https://connect.smartcar.com/oauth/authorize";
     static final String TOKEN_URL_V2 = "https://auth.smartcar.com/oauth/token";
     static final String TOKEN_URL_V3 = "https://iam.smartcar.com/oauth2/token";
     static final String API_V2 = "https://api.smartcar.com/v2.0";
     static final String API_V3 = "https://vehicle.api.smartcar.com/v3";
     static final String SCOPES = "read_vehicle_info read_battery read_charge";
 
-    /** Smartcar requires native redirect URIs of the form sc<clientId>://<host>. */
-    static String redirectUri(String clientId) {
-        return "sc" + clientId.trim() + "://exchange";
-    }
-
-    static String authorizeUrl(Vehicle vehicle) {
-        String clientId = vehicle.scClientId();
-        return AUTH_URL
-                + "?response_type=code"
-                + "&client_id=" + enc(clientId)
-                + "&redirect_uri=" + enc(redirectUri(clientId))
-                + "&scope=" + enc(SCOPES)
-                + "&mode=live"
-                + "&approval_prompt=auto"
-                + "&single_select=true";
-    }
+    /** Fixed redirect for every vehicle/Application ID — registered once in the dashboard,
+     *  same for everyone building this app, so the manifest intent-filter can be static
+     *  instead of needing the Application ID baked in at build time. A tiny detail: this was
+     *  already sitting registered on the original Application, unused, from before this app
+     *  moved to a WebView-based flow — turns out it was the right idea all along. */
+    static final String REDIRECT_URI = "lyriqwidget://callback";
 
     private static String enc(String s) {
         try { return java.net.URLEncoder.encode(s, "UTF-8"); } catch (Exception e) { return s; }
@@ -62,27 +51,34 @@ public final class SmartcarSource implements VehicleSource {
      *  every future refresh keeps hitting Smartcar's /connections endpoint looking for a car
      *  that was never actually found, which is exactly what caused the retry-loop API spike. */
     static void completeConnect(Vehicle vehicle, String code, String userId) throws Exception {
-        boolean v3 = !vehicle.scTokenClientId().isEmpty() && userId != null && !userId.isEmpty();
+        // userId used to come straight from the redirect; the current SDK's callback doesn't
+        // expose it at all (confirmed by inspecting the compiled class directly — no
+        // getUserId() in 4.1.3, despite older docs mentioning one). Not fatal: findVehicleV3()
+        // already falls back to the first vehicle on the /connections list when userId is
+        // empty, which is exactly correct for a single-vehicle app.
+        boolean v3 = !vehicle.scTokenClientId().isEmpty();
         if (v3) {
             String token = appToken(vehicle);
             // /connections can briefly lag right behind the authorization that was just granted
             // (an eventual-consistency window, not a real "no vehicle" state) — retry a few times
             // with backoff before believing it.
-            String foundVehicleId = null;
+            String foundVehicleId = null, foundUserId = null;
             IllegalStateException lastError = null;
             for (int attempt = 0; attempt < 4; attempt++) {
                 if (attempt > 0) {
                     try { Thread.sleep(1500L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
                 }
                 try {
-                    foundVehicleId = findVehicleV3(vehicle, token, userId);
+                    String[] found = findVehicleV3(vehicle, token, userId);
+                    foundVehicleId = found[0];
+                    foundUserId = found[1];
                     break;
                 } catch (IllegalStateException e) {
                     lastError = e;
                 }
             }
             if (foundVehicleId == null) throw lastError != null ? lastError : new IllegalStateException("Smartcar reports no connected vehicles yet");
-            vehicle.setScUserId(userId);
+            vehicle.setScUserId(foundUserId != null ? foundUserId : "");
             vehicle.setScApiVersion("v3");
             vehicle.setScVehicleId(foundVehicleId);
         } else {
@@ -125,12 +121,15 @@ public final class SmartcarSource implements VehicleSource {
         return h;
     }
 
-    private static String findVehicleV3(Vehicle vehicle, String token, String userId) throws Exception {
+    /** Returns {vehicleId, userId} — Smartcar's /connections response already carries the
+     *  user id right next to the vehicle id; no need to get it from the SDK callback at all
+     *  (this SDK version doesn't expose one — see completeConnect()). */
+    private static String[] findVehicleV3(Vehicle vehicle, String token, String userId) throws Exception {
         Http.Response r = Http.request("GET", API_V3 + "/connections", v3Headers(token, userId), null, null);
         android.util.Log.i("LyriqRefresh", "connections: userId=" + userId + " code=" + r.code + " body=" + r.body);
         if (!r.ok()) throw new IllegalStateException("Smartcar connections error (" + r.code + "): " + errorMessage(r.body));
         JSONArray data = new JSONObject(r.body).optJSONArray("data");
-        String first = null;
+        String firstVehicle = null, firstUser = null;
         if (data != null) {
             for (int i = 0; i < data.length(); i++) {
                 JSONObject c = data.getJSONObject(i);
@@ -143,21 +142,24 @@ public final class SmartcarSource implements VehicleSource {
                     if (u != null && u.optJSONObject("data") != null) uid = u.optJSONObject("data").optString("id", uid);
                 }
                 if (vehicleId.isEmpty()) continue;
-                if (first == null) first = vehicleId;
-                if (uid.equals(userId)) return vehicleId; // prefer the vehicle this user just connected
+                if (firstVehicle == null) { firstVehicle = vehicleId; firstUser = uid; }
+                if (uid.equals(userId)) return new String[]{vehicleId, uid}; // prefer the vehicle this user just connected
             }
         }
-        if (first == null) throw new IllegalStateException("Smartcar reports no connected vehicles yet");
-        return first;
+        if (firstVehicle == null) throw new IllegalStateException("Smartcar reports no connected vehicles yet");
+        return new String[]{firstVehicle, firstUser};
     }
 
     private static BatterySnapshot fetchV3(Vehicle vehicle) throws Exception {
         String token = appToken(vehicle);
         String userId = vehicle.scUserId();
         String vehicleId = vehicle.scVehicleId();
-        if (vehicleId.isEmpty()) {
-            vehicleId = findVehicleV3(vehicle, token, userId);
+        if (vehicleId.isEmpty() || userId.isEmpty()) {
+            String[] found = findVehicleV3(vehicle, token, userId);
+            vehicleId = found[0];
+            userId = found[1] != null ? found[1] : userId;
             vehicle.setScVehicleId(vehicleId);
+            vehicle.setScUserId(userId != null ? userId : "");
         }
         Http.Response r = Http.request("GET", API_V3 + "/vehicles/" + vehicleId + "/signals", v3Headers(token, userId), null, null);
         if (r.code == 401) {
@@ -244,7 +246,7 @@ public final class SmartcarSource implements VehicleSource {
 
     private static void exchangeCodeV2(Vehicle vehicle, String code) throws Exception {
         String body = "grant_type=authorization_code&code=" + enc(code)
-                + "&redirect_uri=" + enc(redirectUri(vehicle.scClientId()));
+                + "&redirect_uri=" + enc(REDIRECT_URI);
         tokenRequestV2(vehicle, body);
     }
 

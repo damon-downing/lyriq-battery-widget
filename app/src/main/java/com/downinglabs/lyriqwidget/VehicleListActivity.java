@@ -34,6 +34,7 @@ public final class VehicleListActivity extends Activity {
 
     private android.widget.LinearLayout rowsContainer;
     private TextView emptyState, pickerHint;
+    private android.widget.Button btnAdd;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +67,7 @@ public final class VehicleListActivity extends Activity {
                 startActivityForResult(i, REQ_ADD);
             }
         });
+        btnAdd = findViewById(R.id.btn_add_vehicle);
     }
 
     @Override
@@ -78,6 +80,8 @@ public final class VehicleListActivity extends Activity {
         rowsContainer.removeAllViews();
         List<String> ids = store.vehicleIds();
         emptyState.setVisibility(ids.isEmpty() ? View.VISIBLE : View.GONE);
+        // Single-vehicle app: once one exists, there's nothing left to add outside picker mode.
+        btnAdd.setVisibility(!ids.isEmpty() && !pickerMode ? View.GONE : View.VISIBLE);
         LayoutInflater inflater = LayoutInflater.from(this);
         for (final String id : ids) {
             final Vehicle vehicle = store.get(id);

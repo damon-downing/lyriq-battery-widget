@@ -75,25 +75,15 @@ public final class Vehicle {
     public String scApiVersion() { return sp.getString(k("sc_api_version"), "v2"); }
     public void setScApiVersion(String v) { sp.edit().putString(k("sc_api_version"), v).apply(); }
     public boolean scConnected() {
-        return "v3".equals(scApiVersion()) ? !scUserId().isEmpty() : !scRefreshToken().isEmpty();
+        // V3 used to check scUserId — but this SDK version never provides one (see
+        // SmartcarSource.completeConnect()), so that check could never pass even on a fully
+        // successful connection. scVehicleId is the reliable signal: it's only ever set once
+        // a real vehicle is actually found.
+        return "v3".equals(scApiVersion()) ? !scVehicleId().isEmpty() : !scRefreshToken().isEmpty();
     }
     public void clearSmartcarConnection() {
         sp.edit().remove(k("sc_access")).remove(k("sc_refresh")).remove(k("sc_expires")).remove(k("sc_vehicle"))
                 .remove(k("sc_user_id")).remove(k("sc_api_version")).apply();
-    }
-
-    // ---- home assistant ----
-    public String haUrl() { return sp.getString(k("ha_url"), ""); }
-    public String haToken() { return sp.getString(k("ha_token"), ""); }
-    public String haEntityBattery() { return sp.getString(k("ha_entity_battery"), ""); }
-    public String haEntityRange() { return sp.getString(k("ha_entity_range"), ""); }
-    public String haEntityCharging() { return sp.getString(k("ha_entity_charging"), ""); }
-    public void setHomeAssistant(String url, String token, String battery, String range, String charging) {
-        sp.edit().putString(k("ha_url"), url.trim().replaceAll("/+$", ""))
-                .putString(k("ha_token"), token.trim())
-                .putString(k("ha_entity_battery"), battery.trim())
-                .putString(k("ha_entity_range"), range.trim())
-                .putString(k("ha_entity_charging"), charging.trim()).apply();
     }
 
     // ---- snapshot ----
@@ -130,12 +120,10 @@ public final class Vehicle {
         if (!n.isEmpty()) return n;
         String snapName = snapshot().vehicleName;
         if (snapName != null && !snapName.isEmpty()) return snapName;
-        return VehicleSource.HOME_ASSISTANT.equals(source())
-                ? "Home Assistant vehicle" : "Smartcar vehicle";
+        return "Smartcar vehicle";
     }
 
     public String sourceLabel() {
-        if (VehicleSource.HOME_ASSISTANT.equals(source())) return "Home Assistant";
         if (VehicleSource.MANUAL.equals(source())) return "Demo (no live data)";
         return String.format(Locale.US, "Smartcar%s", scConnected() ? "" : " (not connected)");
     }

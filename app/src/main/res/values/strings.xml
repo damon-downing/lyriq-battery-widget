@@ -8,4 +8,6 @@
     <string name="tap_to_refresh">Tap the ring to refresh</string>
     <string name="refreshing">Refreshing…</string>
     <string name="no_data">Open the app to set up</string>
+    <string name="smartcar_auth_scheme">lyriqwidget</string>
+    <string name="smartcar_auth_host">callback</string>
 </resources>

@@ -116,7 +116,6 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
             <RadioButton android:id="@+id/source_smartcar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Smartcar (official OnStar-backed API)" />
-            <RadioButton android:id="@+id/source_ha" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Home Assistant (onstar2mqtt / any entity)" />
             <RadioButton android:id="@+id/source_manual" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Demo / manual value" />
         </RadioGroup>
 
@@ -143,23 +142,6 @@
             </LinearLayout>
 
             <TextView android:id="@+id/sc_status" style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <!-- Home Assistant -->
-        <LinearLayout
-            android:id="@+id/section_ha"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <TextView style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Reads entity states from Home Assistant's REST API. Works with onstar2mqtt (sensor.NAME_ev_battery_level etc.) or any integration." />
-
-            <EditText android:id="@+id/ha_url" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Base URL, e.g. https://ha.example.com or http://homeassistant.local:8123" android:inputType="textUri" android:importantForAutofill="no" />
-            <EditText android:id="@+id/ha_token" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Long-lived access token" android:inputType="textPassword" android:importantForAutofill="no" />
-            <EditText android:id="@+id/ha_entity_battery" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Battery % entity (sensor.lyriq_ev_battery_level)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
-            <EditText android:id="@+id/ha_entity_range" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Range entity, optional (sensor.lyriq_ev_range)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
-            <EditText android:id="@+id/ha_entity_charging" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Charging entity, optional (binary_sensor / sensor)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
         </LinearLayout>
 
         <!-- Manual / demo -->
