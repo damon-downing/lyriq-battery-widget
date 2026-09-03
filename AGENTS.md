@@ -119,22 +119,23 @@ To regenerate the asset from a new source photo:
 (see "Verifying a change" above); check the charge-port bolt position against a real
 install and adjust if it's off.
 
-## TEMP: demo/manual vehicle source
+## Demo / manual vehicle source
 
-Restored (Sep 2026) purely to let dual-widget testing happen without a second real Smartcar
-account: `ManualSource.java`, `VehicleSource.MANUAL`, the "Demo / manual value" radio button
-and `section_manual` in `activity_vehicle_config.xml`, and `Vehicle.manualPercent()` /
-`manualCharging()` / `setManual()`. Once dual-widget testing is done, remove all of the
-above — grep for "TEMP" to find every touch point. This is NOT the same thing as Smartcar's
-own "simulated vehicle" checkbox (`sc_simulated`), which is a real Smartcar API feature that
-still requires real credentials and goes through the real Connect OAuth flow.
+A permanent, first-class source alongside Smartcar and Home Assistant, not a temporary hack:
+`ManualSource.java`, `VehicleSource.MANUAL`, the "Demo / manual value" radio button and
+`section_manual` in `activity_vehicle_config.xml`, and `Vehicle.manualPercent()` /
+`manualCharging()` / `setManual()`. Zero network calls, zero Smartcar/GM dependency — just a
+SeekBar and a checkbox that feed the widget directly. Useful for testing the widget/car
+render, or standing up a second vehicle, without needing a second real account.
 
-**Removed (Sep 2026).** Investigating a "no data" bug on a test vehicle led down a long detour
-into Smartcar's simulator ecosystem — conclusion: the legacy `mode=simulated` checkbox only
-reaches a fixed non-EV demo fleet, and the newer dashboard Vehicle Simulator needs a webhook
-integration (none deployed) before `/signals` returns anything, so neither path was usable for
-testing. Also removed a short-lived "Vehicle ID override" field that let a specific Smartcar
-vehicle ID be pinned instead of relying on `/connections` auto-discovery — useful for the
-investigation, not useful once the investigation concluded there was nothing to point it at.
-If dual-vehicle testing comes up again, the real fix is deploying `tools/smartcar-webhook/`
-and creating a Dashboard Integration, not re-adding either of these.
+**Investigating a "no data" bug on a test vehicle (Sep 2026)** led down a long detour into
+Smartcar's simulator ecosystem — conclusion: the legacy `mode=simulated` Connect flag only
+reaches a fixed non-EV demo fleet (gas Cadillacs, no traction battery to report), and the
+newer dashboard Vehicle Simulator needs a webhook integration (none deployed) before
+`/signals` returns anything for it. Neither path is usable for testing an EV widget, so the
+`mode=simulated` checkbox and its `Vehicle.scSimulated()` field were removed outright —
+`authorizeUrl()` now always requests `mode=live`. A short-lived "Vehicle ID override" field
+(added, then removed, during the same investigation) is also gone. If dual-vehicle testing
+with real Smartcar data comes up again, the real fix is deploying `tools/smartcar-webhook/`
+and creating a Dashboard Integration — not reintroducing either of the above. The Demo/manual
+source above remains the right tool for testing without a real Smartcar vehicle.

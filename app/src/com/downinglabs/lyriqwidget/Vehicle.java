@@ -46,16 +46,21 @@ public final class Vehicle {
     public boolean isRefreshing() { return sp.getBoolean(k("refreshing"), false); }
     public void setRefreshing(boolean b) { sp.edit().putBoolean(k("refreshing"), b).apply(); }
 
+    // ---- manual / demo ----
+    public int manualPercent() { return sp.getInt(k("manual_percent"), 72); }
+    public boolean manualCharging() { return sp.getBoolean(k("manual_charging"), false); }
+    public void setManual(int percent, boolean charging) {
+        sp.edit().putInt(k("manual_percent"), percent).putBoolean(k("manual_charging"), charging).apply();
+    }
+
     // ---- smartcar ----
     public String scClientId() { return sp.getString(k("sc_client_id"), ""); }
     public String scClientSecret() { return sp.getString(k("sc_client_secret"), ""); }
-    public boolean scSimulated() { return sp.getBoolean(k("sc_simulated"), false); }
     public String scTokenClientId() { return sp.getString(k("sc_token_client_id"), ""); }
-    public void setSmartcarApp(String id2, String tokenClientId, String secret, boolean simulated) {
+    public void setSmartcarApp(String id2, String tokenClientId, String secret) {
         sp.edit().putString(k("sc_client_id"), id2.trim())
                 .putString(k("sc_token_client_id"), tokenClientId.trim())
-                .putString(k("sc_client_secret"), secret.trim())
-                .putBoolean(k("sc_simulated"), simulated).apply();
+                .putString(k("sc_client_secret"), secret.trim()).apply();
     }
     public String scAccessToken() { return sp.getString(k("sc_access"), ""); }
     public String scRefreshToken() { return sp.getString(k("sc_refresh"), ""); }
@@ -131,6 +136,7 @@ public final class Vehicle {
 
     public String sourceLabel() {
         if (VehicleSource.HOME_ASSISTANT.equals(source())) return "Home Assistant";
+        if (VehicleSource.MANUAL.equals(source())) return "Demo (no live data)";
         return String.format(Locale.US, "Smartcar%s", scConnected() ? "" : " (not connected)");
     }
 }

@@ -45,7 +45,7 @@ public final class SmartcarSource implements VehicleSource {
                 + "&client_id=" + enc(clientId)
                 + "&redirect_uri=" + enc(redirectUri(clientId))
                 + "&scope=" + enc(SCOPES)
-                + "&mode=" + (vehicle.scSimulated() ? "simulated" : "live")
+                + "&mode=live"
                 + "&approval_prompt=auto"
                 + "&single_select=true";
     }
@@ -65,7 +65,23 @@ public final class SmartcarSource implements VehicleSource {
         boolean v3 = !vehicle.scTokenClientId().isEmpty() && userId != null && !userId.isEmpty();
         if (v3) {
             String token = appToken(vehicle);
-            String foundVehicleId = findVehicleV3(vehicle, token, userId); // throws if none found — nothing persisted yet
+            // /connections can briefly lag right behind the authorization that was just granted
+            // (an eventual-consistency window, not a real "no vehicle" state) — retry a few times
+            // with backoff before believing it.
+            String foundVehicleId = null;
+            IllegalStateException lastError = null;
+            for (int attempt = 0; attempt < 4; attempt++) {
+                if (attempt > 0) {
+                    try { Thread.sleep(1500L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+                try {
+                    foundVehicleId = findVehicleV3(vehicle, token, userId);
+                    break;
+                } catch (IllegalStateException e) {
+                    lastError = e;
+                }
+            }
+            if (foundVehicleId == null) throw lastError != null ? lastError : new IllegalStateException("Smartcar reports no connected vehicles yet");
             vehicle.setScUserId(userId);
             vehicle.setScApiVersion("v3");
             vehicle.setScVehicleId(foundVehicleId);
@@ -111,6 +127,7 @@ public final class SmartcarSource implements VehicleSource {
 
     private static String findVehicleV3(Vehicle vehicle, String token, String userId) throws Exception {
         Http.Response r = Http.request("GET", API_V3 + "/connections", v3Headers(token, userId), null, null);
+        android.util.Log.i("LyriqRefresh", "connections: userId=" + userId + " code=" + r.code + " body=" + r.body);
         if (!r.ok()) throw new IllegalStateException("Smartcar connections error (" + r.code + "): " + errorMessage(r.body));
         JSONArray data = new JSONObject(r.body).optJSONArray("data");
         String first = null;
