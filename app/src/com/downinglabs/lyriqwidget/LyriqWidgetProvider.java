@@ -65,19 +65,41 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         super.onReceive(context, intent);
     }
 
-    /** Repaints just the widgets bound to one vehicle (after editing it, or after a refresh). */
+    /** Repaints just the widgets bound to one vehicle, and kicks a refresh if the data is stale.
+     *  Only call this from a real widget-lifecycle entry point (onUpdate, onEnabled, a config
+     *  save, a widget just getting bound) — NEVER from inside a refresh's own completion
+     *  handler. A failed fetch never updates the success timestamp, so if the post-fetch
+     *  repaint used this method too, "still stale" would immediately reschedule another
+     *  refresh, which fails, which repaints, which reschedules — a tight, silent, self-sustaining
+     *  retry loop with nothing to break it. Use repaintForVehicle() there instead. */
     public static void updateForVehicle(Context context, String vehicleId) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         VehicleStore store = new VehicleStore(context);
         for (int id : store.widgetIdsForVehicle(vehicleId)) updateOne(context, manager, store, id);
     }
 
+    /** Pure repaint, no staleness check, no refresh scheduled. Use right after a refresh
+     *  completes (success or failure) — the fetch that just ran already answers the "is this
+     *  due" question; re-asking it here is what caused the retry-loop bug above. */
+    public static void repaintForVehicle(Context context, String vehicleId) {
+        AppWidgetManager manager = AppWidgetManager.getInstance(context);
+        VehicleStore store = new VehicleStore(context);
+        for (int id : store.widgetIdsForVehicle(vehicleId)) paintOne(context, manager, store, id);
+    }
+
+    private static void paintOne(Context context, AppWidgetManager manager, VehicleStore store, int widgetId) {
+        String vehicleId = store.vehicleIdForWidget(widgetId);
+        if (vehicleId == null) return;
+        Vehicle vehicle = store.get(vehicleId);
+        manager.updateAppWidget(widgetId, build(context, widgetId, vehicle, vehicle.snapshot()));
+    }
+
     private static void updateOne(Context context, AppWidgetManager manager, VehicleStore store, int widgetId) {
         String vehicleId = store.vehicleIdForWidget(widgetId);
-        if (vehicleId == null) return; // placed but not configured yet; the OS configure flow will follow up
+        if (vehicleId == null) return;
+        paintOne(context, manager, store, widgetId);
         Vehicle vehicle = store.get(vehicleId);
         BatterySnapshot snap = vehicle.snapshot();
-        manager.updateAppWidget(widgetId, build(context, widgetId, vehicle, snap));
         long stale = vehicle.refreshMinutes() * 60_000L;
         if (snap.updatedAt == 0 || System.currentTimeMillis() - snap.updatedAt > stale) {
             Scheduler.refreshSoon(context, vehicleId);

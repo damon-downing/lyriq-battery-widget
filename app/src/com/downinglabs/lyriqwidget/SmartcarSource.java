@@ -56,15 +56,19 @@ public final class SmartcarSource implements VehicleSource {
 
     // ------------------------------------------------------------------ connect
 
-    /** Completes the Connect flow after the redirect. userId may be null on legacy apps. */
+    /** Completes the Connect flow after the redirect. userId may be null on legacy apps.
+     *  Only persists "connected" state (scUserId/scApiVersion) once a real vehicle is
+     *  confirmed — marking a vehicle connected before that leaves it in a limbo state where
+     *  every future refresh keeps hitting Smartcar's /connections endpoint looking for a car
+     *  that was never actually found, which is exactly what caused the retry-loop API spike. */
     static void completeConnect(Vehicle vehicle, String code, String userId) throws Exception {
         boolean v3 = !vehicle.scTokenClientId().isEmpty() && userId != null && !userId.isEmpty();
         if (v3) {
+            String token = appToken(vehicle);
+            String foundVehicleId = findVehicleV3(vehicle, token, userId); // throws if none found — nothing persisted yet
             vehicle.setScUserId(userId);
             vehicle.setScApiVersion("v3");
-            vehicle.setScVehicleId("");
-            String token = appToken(vehicle);
-            vehicle.setScVehicleId(findVehicleV3(vehicle, token, userId));
+            vehicle.setScVehicleId(foundVehicleId);
         } else {
             vehicle.setScApiVersion("v2");
             exchangeCodeV2(vehicle, code);

@@ -25,7 +25,9 @@ public final class Refresher {
         } finally {
             vehicle.setRefreshing(false);
         }
-        LyriqWidgetProvider.updateForVehicle(context, vehicleId);
+        // Pure repaint — NOT updateForVehicle(), which would re-check staleness and, on a
+        // failed fetch, immediately reschedule another attempt (see LyriqWidgetProvider).
+        LyriqWidgetProvider.repaintForVehicle(context, vehicleId);
         return result;
     }
 

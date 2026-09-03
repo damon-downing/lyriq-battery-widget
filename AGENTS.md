@@ -47,6 +47,16 @@ docs/SETUP.md                end-user setup guide (Smartcar, Home Assistant)
 - **Never touch a RemoteViews id that isn't in that layout.** A single bad id makes the
   launcher render "Problem loading widget". The `Spec` table in `LyriqWidgetProvider`
   declares which ids each layout has; extend it when adding layouts.
+- **Never repaint-and-recheck-staleness from inside a refresh's own completion handler.**
+  `LyriqWidgetProvider.updateForVehicle()` repaints AND schedules another refresh if the
+  data still looks stale — correct for real lifecycle entry points (onUpdate, onEnabled, a
+  config save) but NOT for the repaint a refresh does when it finishes, since a failed
+  fetch never updates the success timestamp: "still stale" → schedule another attempt →
+  fails → repaint → still stale → schedule again, forever, hammering the real API with
+  nothing to break the loop (this actually happened: ~230 Smartcar API calls in one hour
+  from a single vehicle stuck half-connected — see `SmartcarSource.completeConnect()`'s
+  comment for the state bug that fed it). `Refresher.refreshVehicle()` must call
+  `LyriqWidgetProvider.repaintForVehicle()` (pure paint, no staleness check) instead.
 - **Every widget size must fit its declared `SizeF`.** `SMALL` (110×40 dp) is any single
   row, `MEDIUM` (120×140) is 2×2/3×2, `LARGE` (250×120) is 4×2 and up. Vertical layouts
   go in MEDIUM only.
