@@ -117,7 +117,6 @@
             android:orientation="vertical">
             <RadioButton android:id="@+id/source_smartcar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Smartcar (official OnStar-backed API)" />
             <RadioButton android:id="@+id/source_ha" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Home Assistant (onstar2mqtt / any entity)" />
-            <RadioButton android:id="@+id/source_manual" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Demo / manual value (TEMP, for testing)" />
         </RadioGroup>
 
         <!-- Smartcar -->
@@ -138,9 +137,6 @@
                 android:textIsSelectable="true" android:textSize="13sp" android:fontFamily="monospace" android:textColor="@color/widget_text" android:paddingTop="6dp" android:paddingBottom="6dp" />
 
             <CheckBox android:id="@+id/sc_simulated" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Use a Smartcar simulated vehicle (test mode)" />
-            <TextView style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
-                android:text="Vehicle ID override, optional — paste from the dashboard's Vehicles tab to pick a specific one (e.g. a vehicle created in the Simulator) instead of whatever Connect finds automatically." />
-            <EditText android:id="@+id/sc_vehicle_id" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Vehicle ID (leave blank for automatic)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                 <Button android:id="@+id/btn_sc_connect" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Connect vehicle" />
@@ -165,21 +161,6 @@
             <EditText android:id="@+id/ha_entity_battery" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Battery % entity (sensor.lyriq_ev_battery_level)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
             <EditText android:id="@+id/ha_entity_range" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Range entity, optional (sensor.lyriq_ev_range)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
             <EditText android:id="@+id/ha_entity_charging" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Charging entity, optional (binary_sensor / sensor)" android:inputType="textNoSuggestions" android:importantForAutofill="no" />
-        </LinearLayout>
-
-        <!-- Manual / demo (TEMP) -->
-        <LinearLayout
-            android:id="@+id/section_manual"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <TextView style="@style/Hint" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="No network calls at all — just a fixed value you set here. Handy for standing up a second test vehicle without a second real account." />
-
-            <TextView android:id="@+id/manual_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_text" />
-            <SeekBar android:id="@+id/manual_percent" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" />
-            <CheckBox android:id="@+id/manual_charging" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Charging" />
         </LinearLayout>
 
         <TextView style="@style/SectionTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Refresh" />

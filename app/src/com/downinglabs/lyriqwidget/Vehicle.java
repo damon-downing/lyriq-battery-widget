@@ -46,13 +46,6 @@ public final class Vehicle {
     public boolean isRefreshing() { return sp.getBoolean(k("refreshing"), false); }
     public void setRefreshing(boolean b) { sp.edit().putBoolean(k("refreshing"), b).apply(); }
 
-    // ---- manual / demo (TEMP: see AGENTS.md — remove once dual-widget testing is done) ----
-    public int manualPercent() { return sp.getInt(k("manual_percent"), 72); }
-    public boolean manualCharging() { return sp.getBoolean(k("manual_charging"), false); }
-    public void setManual(int percent, boolean charging) {
-        sp.edit().putInt(k("manual_percent"), percent).putBoolean(k("manual_charging"), charging).apply();
-    }
-
     // ---- smartcar ----
     public String scClientId() { return sp.getString(k("sc_client_id"), ""); }
     public String scClientSecret() { return sp.getString(k("sc_client_secret"), ""); }
@@ -138,7 +131,6 @@ public final class Vehicle {
 
     public String sourceLabel() {
         if (VehicleSource.HOME_ASSISTANT.equals(source())) return "Home Assistant";
-        if (VehicleSource.MANUAL.equals(source())) return "Demo (no live data)";
         return String.format(Locale.US, "Smartcar%s", scConnected() ? "" : " (not connected)");
     }
 }
