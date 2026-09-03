@@ -6,9 +6,11 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 import android.util.SizeF;
 import android.widget.RemoteViews;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,6 +23,7 @@ import java.util.Map;
 public final class LyriqWidgetProvider extends AppWidgetProvider {
     public static final String ACTION_REFRESH = "com.downinglabs.lyriqwidget.REFRESH";
     public static final String EXTRA_WIDGET_ID = AppWidgetManager.EXTRA_APPWIDGET_ID;
+    private static final String TAG = "LyriqRefresh";
 
     private static final SizeF SMALL = new SizeF(110f, 40f);   // any short row: 2x1, 3x1, 4x1
     private static final SizeF MEDIUM = new SizeF(120f, 140f); // 2x2, 3x2 (needs real height for the ring)
@@ -28,18 +31,21 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
+        Log.i(TAG, "onUpdate: ids=" + Arrays.toString(ids));
         VehicleStore store = new VehicleStore(context);
         for (int id : ids) updateOne(context, manager, store, id);
     }
 
     @Override
     public void onDeleted(Context context, int[] appWidgetIds) {
+        Log.i(TAG, "onDeleted: ids=" + Arrays.toString(appWidgetIds));
         VehicleStore store = new VehicleStore(context);
         for (int id : appWidgetIds) store.unbindWidget(id);
     }
 
     @Override
     public void onEnabled(Context context) {
+        Log.i(TAG, "onEnabled");
         Scheduler.schedulePeriodic(context);
         Scheduler.refreshDueSoon(context);
     }
@@ -101,7 +107,10 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         Vehicle vehicle = store.get(vehicleId);
         BatterySnapshot snap = vehicle.snapshot();
         long stale = vehicle.refreshMinutes() * 60_000L;
-        if (snap.updatedAt == 0 || System.currentTimeMillis() - snap.updatedAt > stale) {
+        boolean isStale = snap.updatedAt == 0 || System.currentTimeMillis() - snap.updatedAt > stale;
+        Log.i(TAG, "updateOne: widget=" + widgetId + " vehicle=" + vehicleId
+                + " updatedAt=" + snap.updatedAt + " staleAfterMs=" + stale + " stale=" + isStale);
+        if (isStale) {
             Scheduler.refreshSoon(context, vehicleId);
         }
     }

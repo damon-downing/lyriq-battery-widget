@@ -5,12 +5,14 @@ import android.app.job.JobScheduler;
 import android.content.ComponentName;
 import android.content.Context;
 import android.os.PersistableBundle;
+import android.util.Log;
 
 import java.util.concurrent.TimeUnit;
 
 /** JobScheduler wiring: one periodic job (checks every vehicle that has a widget) plus an
  *  expedited one-off, either for one specific vehicle (a tap) or a general catch-up. */
 public final class Scheduler {
+    private static final String TAG = "LyriqRefresh";
     private static final int JOB_PERIODIC = 1001;
     private static final int JOB_ONCE = 1002;
 
@@ -34,10 +36,12 @@ public final class Scheduler {
                 .setPersisted(true)
                 .build();
         js.schedule(job);
+        Log.i(TAG, "schedulePeriodic: every " + minutes + " min");
     }
 
     public static void cancelPeriodic(Context context) {
         context.getSystemService(JobScheduler.class).cancel(JOB_PERIODIC);
+        Log.i(TAG, "cancelPeriodic");
     }
 
     /** Refreshes one specific vehicle right away (e.g. a widget tap). */
@@ -51,6 +55,7 @@ public final class Scheduler {
                 .setExpedited(true)
                 .build();
         js.schedule(job);
+        Log.i(TAG, "refreshSoon: scheduled vehicle=" + vehicleId);
     }
 
     /** Catch-up pass: refreshes every due vehicle that has a placed widget. */
@@ -61,5 +66,6 @@ public final class Scheduler {
                 .setExpedited(true)
                 .build();
         js.schedule(job);
+        Log.i(TAG, "refreshDueSoon: scheduled catch-up scan");
     }
 }

@@ -11,12 +11,16 @@ public final class Refresher {
 
     /** Blocking; call from a background thread. Returns the snapshot that is now displayed. */
     public static BatterySnapshot refreshVehicle(Context context, String vehicleId) {
+        long start = System.currentTimeMillis();
+        Log.i(TAG, "refreshVehicle: start vehicle=" + vehicleId);
         VehicleStore store = new VehicleStore(context);
         Vehicle vehicle = store.get(vehicleId);
         BatterySnapshot result;
         try {
             result = VehicleSource.forVehicle(vehicle).fetch(vehicle);
             vehicle.saveSnapshot(result);
+            Log.i(TAG, "refreshVehicle: success vehicle=" + vehicleId + " percent=" + result.percent
+                    + " (" + (System.currentTimeMillis() - start) + "ms)");
         } catch (Exception e) {
             Log.w(TAG, "refresh failed for " + vehicleId, e);
             String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();

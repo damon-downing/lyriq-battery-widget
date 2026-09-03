@@ -3,6 +3,7 @@ package com.downinglabs.lyriqwidget;
 import android.app.job.JobParameters;
 import android.app.job.JobService;
 import android.os.PersistableBundle;
+import android.util.Log;
 
 /**
  * One job class handles both cases: the periodic job (no "vehicle_id" extra) refreshes every
@@ -11,6 +12,7 @@ import android.os.PersistableBundle;
  */
 public final class RefreshJobService extends JobService {
     static final String EXTRA_VEHICLE_ID = "vehicle_id";
+    private static final String TAG = "LyriqRefresh";
 
     private volatile Thread worker;
 
@@ -18,6 +20,7 @@ public final class RefreshJobService extends JobService {
     public boolean onStartJob(final JobParameters params) {
         final PersistableBundle extras = params.getExtras();
         final String vehicleId = extras == null ? null : extras.getString(EXTRA_VEHICLE_ID);
+        Log.i(TAG, "onStartJob: jobId=" + params.getJobId() + " vehicle=" + vehicleId);
         worker = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -28,6 +31,7 @@ public final class RefreshJobService extends JobService {
                         Refresher.refreshDueVehicles(RefreshJobService.this);
                     }
                 } finally {
+                    Log.i(TAG, "onStartJob: jobId=" + params.getJobId() + " done");
                     jobFinished(params, false);
                 }
             }
@@ -38,6 +42,7 @@ public final class RefreshJobService extends JobService {
 
     @Override
     public boolean onStopJob(JobParameters params) {
+        Log.i(TAG, "onStopJob: jobId=" + params.getJobId());
         Thread t = worker;
         if (t != null) t.interrupt();
         return true; // reschedule
