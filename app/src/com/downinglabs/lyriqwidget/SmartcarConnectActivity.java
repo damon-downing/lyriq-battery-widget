@@ -35,7 +35,13 @@ public final class SmartcarConnectActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setSupportMultipleWindows(false);
-        CookieManager.getInstance().setAcceptCookie(true);
+        // Strip the "; wv)" marker stock WebView adds to its User-Agent — some login/fraud-detection
+        // pages (GM's included) specifically distrust embedded WebViews and block them even with
+        // fully correct credentials, while trusting a normal-looking Chrome UA.
+        s.setUserAgentString(s.getUserAgentString().replace("; wv)", ")"));
+        CookieManager cookies = CookieManager.getInstance();
+        cookies.setAcceptCookie(true);
+        cookies.setAcceptThirdPartyCookies(web, true); // GM's SSO bounces across subdomains; needs this
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
