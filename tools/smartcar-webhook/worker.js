@@ -42,7 +42,6 @@ export default {
     // polls /signals itself and the subscription is what keeps that cache fresh.
     const given = request.headers.get("SC-Signature") || "";
     const expected = await hmacHex(env.SMARTCAR_AMT, raw);
-    console.log("delivery payload:", raw); // TEMP diagnostic — remove once the Closure question is resolved
     if (given.length !== expected.length || given !== expected) return json(401, { error: "bad signature" });
     return json(200, { ok: true });
   },

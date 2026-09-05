@@ -27,13 +27,10 @@ public final class SmartcarConnectActivity extends Activity {
         String vehicleId = getIntent().getStringExtra(EXTRA_VEHICLE_ID);
         final Vehicle vehicle = new VehicleStore(this).get(vehicleId);
 
-        // TEMP: using the no-scope constructor so Smartcar's Vehicle Access dashboard config
-        // drives what gets requested, for testing which signals actually work for this
-        // vehicle. Original working baseline, restore via SmartcarSource.SCOPES if needed:
-        // "read_vehicle_info read_battery read_charge read_security"
         SmartcarAuth smartcarAuth = new SmartcarAuth(
                 vehicle.scClientId(),
                 SmartcarSource.REDIRECT_URI,
+                SmartcarSource.SCOPES.split(" "),
                 new SmartcarCallback() {
                     @Override
                     public void handleResponse(final SmartcarResponse response) {
