@@ -169,6 +169,9 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
         } else if (spec.hero == Spec.HERO_CAR) {
             rv.setImageViewBitmap(R.id.gauge, CarRenderer.car(context, vehicle.carColor(), snap.charging,
                     dp(context, spec.heroW), dp(context, spec.heroH)));
+            // Only Car layouts have a lock_icon view (see widget_car_*.xml) — touching this id
+            // on Ring/Bar would break them, per the RemoteViews id rule in AGENTS.md.
+            rv.setImageViewBitmap(R.id.lock_icon, WidgetRenderer.lockIcon(context, snap.locked, dp(context, 18)));
         }
         if (spec.barW > 0) {
             rv.setImageViewBitmap(R.id.bar, CarRenderer.bar(context, snap, dp(context, spec.barW), dp(context, 8)));
@@ -194,14 +197,10 @@ public final class LyriqWidgetProvider extends AppWidgetProvider {
                 .putExtra(EXTRA_WIDGET_ID, widgetId);
         PendingIntent refreshPi = PendingIntent.getBroadcast(context, widgetId, refresh,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        PendingIntent openPi = myCadillacIntent(context);
-        if (openPi != null) {
-            // Widget body opens myCadillac; the hero image (ring / car) or the bar stays a refresh button.
-            rv.setOnClickPendingIntent(R.id.widget_root, openPi);
-            rv.setOnClickPendingIntent(spec.hero == Spec.HERO_NONE ? R.id.bar : R.id.gauge, refreshPi);
-        } else {
-            rv.setOnClickPendingIntent(R.id.widget_root, refreshPi);
-        }
+        // Tapping anywhere on the tile refreshes everything (battery + lock, same /signals
+        // call). The old "background opens myCadillac" behavior is on hold — see AGENTS.md —
+        // pending the caching investigation; myCadillacIntent() is kept for when it's revisited.
+        rv.setOnClickPendingIntent(R.id.widget_root, refreshPi);
         return rv;
     }
 

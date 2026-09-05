@@ -99,4 +99,27 @@ public final class WidgetRenderer {
         if (!nick.isEmpty()) return nick;
         return s.vehicleName == null || s.vehicleName.isEmpty() ? context.getString(R.string.vehicle_name_default) : s.vehicleName;
     }
+
+    /** Small padlock badge — green locked, red unlocked, grey when unknown. sizePx square. */
+    public static Bitmap lockIcon(Context context, Boolean locked, int sizePx) {
+        Bitmap bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmp);
+        int color = locked == null ? context.getColor(R.color.gauge_track)
+                : locked ? context.getColor(R.color.gauge_charging) : context.getColor(R.color.gauge_low);
+
+        Paint shackle = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shackle.setColor(color);
+        shackle.setStyle(Paint.Style.STROKE);
+        shackle.setStrokeWidth(sizePx * 0.13f);
+        shackle.setStrokeCap(Paint.Cap.ROUND);
+        float cx = sizePx * 0.5f, shackleR = sizePx * 0.24f, shackleTop = sizePx * 0.08f;
+        RectF shackleBox = new RectF(cx - shackleR, shackleTop, cx + shackleR, shackleTop + shackleR * 2f);
+        c.drawArc(shackleBox, 180, 180, false, shackle);
+
+        Paint body = new Paint(Paint.ANTI_ALIAS_FLAG);
+        body.setColor(color);
+        RectF bodyRect = new RectF(cx - sizePx * 0.32f, shackleTop + shackleR, cx + sizePx * 0.32f, sizePx * 0.88f);
+        c.drawRoundRect(bodyRect, sizePx * 0.08f, sizePx * 0.08f, body);
+        return bmp;
+    }
 }

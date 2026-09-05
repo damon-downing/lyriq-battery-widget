@@ -88,6 +88,7 @@ public final class Vehicle {
 
     // ---- snapshot ----
     public BatterySnapshot snapshot() {
+        int lockedInt = sp.getInt(k("snap_locked"), -1); // -1 unknown, 0 false, 1 true
         return new BatterySnapshot(
                 sp.getInt(k("snap_percent"), -1),
                 Double.longBitsToDouble(sp.getLong(k("snap_range"), Double.doubleToLongBits(-1))),
@@ -95,7 +96,8 @@ public final class Vehicle {
                 sp.getBoolean(k("snap_plugged"), false),
                 sp.getLong(k("snap_updated"), 0),
                 sp.getString(k("snap_name"), ""),
-                sp.getString(k("snap_error"), null));
+                sp.getString(k("snap_error"), null),
+                lockedInt < 0 ? null : lockedInt == 1);
     }
 
     public void saveSnapshot(BatterySnapshot s) {
@@ -105,6 +107,7 @@ public final class Vehicle {
                 .putBoolean(k("snap_charging"), s.charging)
                 .putBoolean(k("snap_plugged"), s.pluggedIn)
                 .putLong(k("snap_updated"), s.updatedAt)
+                .putInt(k("snap_locked"), s.locked == null ? -1 : (s.locked ? 1 : 0))
                 .putString(k("snap_name"), s.vehicleName == null ? "" : s.vehicleName);
         if (s.error == null) e.remove(k("snap_error")); else e.putString(k("snap_error"), s.error);
         e.apply();

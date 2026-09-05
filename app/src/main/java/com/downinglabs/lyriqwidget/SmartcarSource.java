@@ -30,7 +30,7 @@ public final class SmartcarSource implements VehicleSource {
     static final String TOKEN_URL_V3 = "https://iam.smartcar.com/oauth2/token";
     static final String API_V2 = "https://api.smartcar.com/v2.0";
     static final String API_V3 = "https://vehicle.api.smartcar.com/v3";
-    static final String SCOPES = "read_vehicle_info read_battery read_charge";
+    static final String SCOPES = "read_vehicle_info read_battery read_charge read_security";
 
     /** Fixed redirect for every vehicle/Application ID — registered once in the dashboard,
      *  same for everyone building this app, so the manifest intent-filter can be static
@@ -171,6 +171,7 @@ public final class SmartcarSource implements VehicleSource {
         int percent = -1;
         double rangeMiles = -1;
         boolean charging = false, plugged = false;
+        Boolean locked = null;
         long socAt = 0, chargeAt = 0, plugAt = 0;
         JSONObject root = new JSONObject(r.body);
         JSONArray data = root.optJSONArray("data");
@@ -181,6 +182,7 @@ public final class SmartcarSource implements VehicleSource {
                 JSONObject a = item.optJSONObject("attributes");
                 if (a == null) a = item;
                 String name = (a.optString("name", "") + " " + a.optString("code", "") + " " + item.optString("id", "")).toLowerCase(Locale.US);
+                android.util.Log.i("LyriqRefresh", "v3 signal: " + name);
                 JSONObject status = a.optJSONObject("status");
                 if (status != null && "ERROR".equalsIgnoreCase(status.optString("value", ""))) continue;
                 JSONObject body = a.optJSONObject("body");
@@ -203,6 +205,8 @@ public final class SmartcarSource implements VehicleSource {
                 } else if (name.contains("charge-ischargingcableconnected") || name.contains("charge-ispluggedin")) {
                     plugged = body.optBoolean("value", false) || "true".equalsIgnoreCase(body.optString("value", ""));
                     plugAt = at;
+                } else if (name.contains("closure-islocked")) {
+                    locked = body.optBoolean("value", false) || "true".equalsIgnoreCase(body.optString("value", ""));
                 }
             }
         }
@@ -220,8 +224,8 @@ public final class SmartcarSource implements VehicleSource {
         charging = charging && chargeFresh;
         plugged = (plugged && (plugFresh || chargeFresh)) || charging;
         android.util.Log.i("LyriqRefresh", "v3: soc=" + percent + " range=" + rangeMiles + " charging=" + charging
-                + " plugged=" + plugged + " socAge=" + (now - dataAt) / 60000 + "min plugAge=" + (plugAt > 0 ? (now - plugAt) / 60000 : -1) + "min");
-        return new BatterySnapshot(percent, rangeMiles, charging, plugged, dataAt, "Cadillac LYRIQ", null);
+                + " plugged=" + plugged + " locked=" + locked + " socAge=" + (now - dataAt) / 60000 + "min plugAge=" + (plugAt > 0 ? (now - plugAt) / 60000 : -1) + "min");
+        return new BatterySnapshot(percent, rangeMiles, charging, plugged, dataAt, "Cadillac LYRIQ", null, locked);
     }
 
     /** Plug and charge status older than this are not shown; the OEM only refreshes them on events. */
